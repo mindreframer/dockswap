@@ -82,11 +82,11 @@ test-e2e: build
 
 test-e2e-basic: build
 	@echo "Running basic flow E2E tests..."
-	@bun test e2e/basic-flow.test.js --timeout=30000
+	@bun test e2e/01-basic* --timeout=30000
 
 test-e2e-error: build
 	@echo "Running error scenario E2E tests..."
-	@bun test e2e/error-scenarios.test.js --timeout=30000
+	@bun test e2e/02-error* --timeout=30000
 
 test-all: test test-e2e
 
