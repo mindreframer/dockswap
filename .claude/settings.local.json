@@ -3,7 +3,11 @@
     "allow": [
       "Bash(go mod init:*)",
       "Bash(mkdir:*)",
-      "Bash(go run:*)"
+      "Bash(go run:*)",
+      "Bash(go mod:*)",
+      "Bash(ls:*)",
+      "Bash(find:*)",
+      "Bash(go:*)"
     ],
     "deny": []
   }
