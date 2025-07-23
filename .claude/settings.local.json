@@ -9,7 +9,17 @@
       "Bash(find:*)",
       "Bash(go:*)",
       "Bash(make:*)",
-      "Bash(cp /Users/roman/Desktop/work/prj.memomoo/dockswap/internal/docker/client.go /Users/roman/Desktop/work/prj.memomoo/dockswap/internal/docker/client.go.backup)"
+      "Bash(cp /Users/roman/Desktop/work/prj.memomoo/dockswap/internal/docker/client.go /Users/roman/Desktop/work/prj.memomoo/dockswap/internal/docker/client.go.backup)",
+      "Bash(docker pull:*)",
+      "Bash(./dockswap:*)",
+      "Bash(docker ps:*)",
+      "Bash(docker stop:*)",
+      "Bash(docker rm:*)",
+      "Bash(docker network inspect:*)",
+      "Bash(docker network:*)",
+      "Bash(true)",
+      "Bash(curl:*)",
+      "Bash(docker logs:*)"
     ],
     "deny": []
   }
