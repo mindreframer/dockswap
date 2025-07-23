@@ -64,7 +64,7 @@ func (cm *CaddyManager) ValidateCaddyRunning() error {
 	return nil
 }
 
-func (cm *CaddyManager) GenerateConfig(configs map[string]*config.AppConfig, states map[string]*state.AppState) error {
+func (cm *CaddyManager) GenerateConfig(configs map[string]*config.AppConfig, states interface{}) error {
 	templateContent, err := os.ReadFile(cm.TemplatePath)
 	if err != nil {
 		return fmt.Errorf("failed to read template file %s: %w", cm.TemplatePath, err)
@@ -140,11 +140,11 @@ func (cm *CaddyManager) UpdateAppRouting(appName string, configs map[string]*con
 	return nil
 }
 
-func (cm *CaddyManager) buildTemplateData(configs map[string]*config.AppConfig, states map[string]*state.AppState) (*TemplateData, error) {
+func (cm *CaddyManager) buildTemplateData(configs map[string]*config.AppConfig, states interface{}) (*TemplateData, error) {
 	var apps []AppTemplateData
 
 	for appName, appConfig := range configs {
-		appState, exists := states[appName]
+		appState, exists := states.(map[string]*state.AppState)[appName]
 		if !exists {
 			return nil, fmt.Errorf("no state found for app %s", appName)
 		}
@@ -259,4 +259,9 @@ func (cm *CaddyManager) CreateDefaultTemplate() error {
 	}
 
 	return nil
+}
+
+type CaddyManagerInterface interface {
+	ReloadCaddy() error
+	GenerateConfig(configs map[string]*config.AppConfig, states interface{}) error
 }
