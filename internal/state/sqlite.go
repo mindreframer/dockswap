@@ -156,6 +156,25 @@ type Deployment struct {
 	RollbackOf  sql.NullInt64
 }
 
+type DeploymentEvent struct {
+	ID           int64
+	DeploymentID int64
+	AppName      string
+	EventType    string
+	Payload      string
+	Error        sql.NullString
+	CreatedAt    time.Time
+}
+
+type CurrentState struct {
+	AppName      string
+	DeploymentID int64
+	ActiveColor  string
+	Image        string
+	Status       string
+	UpdatedAt    time.Time
+}
+
 // --- AppConfig Methods ---
 
 func InsertAppConfig(db *sql.DB, appName, configYAML, configSHA string) (int64, error) {
@@ -243,4 +262,92 @@ func GetDeploymentHistory(db *sql.DB, appName string) ([]Deployment, error) {
 		deployments = append(deployments, d)
 	}
 	return deployments, nil
+}
+
+// --- DeploymentEvent Methods ---
+
+func InsertDeploymentEvent(db *sql.DB, deploymentID int64, appName, eventType, payload string, errMsg *string) (int64, error) {
+	var errVal sql.NullString
+	if errMsg != nil {
+		errVal = sql.NullString{String: *errMsg, Valid: true}
+	}
+	res, err := db.Exec(`
+		INSERT INTO deployment_events (deployment_id, app_name, event_type, payload, error, created_at)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, deploymentID, appName, eventType, payload, errVal, time.Now().UTC())
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+func GetDeploymentEvents(db *sql.DB, deploymentID int64) ([]DeploymentEvent, error) {
+	rows, err := db.Query(`
+		SELECT id, deployment_id, app_name, event_type, payload, error, created_at
+		FROM deployment_events
+		WHERE deployment_id = ?
+		ORDER BY created_at ASC
+	`, deploymentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var events []DeploymentEvent
+	for rows.Next() {
+		var e DeploymentEvent
+		if err := rows.Scan(&e.ID, &e.DeploymentID, &e.AppName, &e.EventType, &e.Payload, &e.Error, &e.CreatedAt); err != nil {
+			return nil, err
+		}
+		events = append(events, e)
+	}
+	return events, nil
+}
+
+// --- CurrentState Methods ---
+
+func UpsertCurrentState(db *sql.DB, appName string, deploymentID int64, activeColor, image, status string) error {
+	_, err := db.Exec(`
+		INSERT INTO current_state (app_name, deployment_id, active_color, image, status, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?)
+		ON CONFLICT(app_name) DO UPDATE SET
+			deployment_id=excluded.deployment_id,
+			active_color=excluded.active_color,
+			image=excluded.image,
+			status=excluded.status,
+			updated_at=excluded.updated_at
+	`, appName, deploymentID, activeColor, image, status, time.Now().UTC())
+	return err
+}
+
+func GetCurrentState(db *sql.DB, appName string) (*CurrentState, error) {
+	row := db.QueryRow(`
+		SELECT app_name, deployment_id, active_color, image, status, updated_at
+		FROM current_state
+		WHERE app_name = ?
+	`, appName)
+	var cs CurrentState
+	if err := row.Scan(&cs.AppName, &cs.DeploymentID, &cs.ActiveColor, &cs.Image, &cs.Status, &cs.UpdatedAt); err != nil {
+		return nil, err
+	}
+	return &cs, nil
+}
+
+func GetAllCurrentStates(db *sql.DB) ([]CurrentState, error) {
+	rows, err := db.Query(`
+		SELECT app_name, deployment_id, active_color, image, status, updated_at
+		FROM current_state
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var states []CurrentState
+	for rows.Next() {
+		var cs CurrentState
+		if err := rows.Scan(&cs.AppName, &cs.DeploymentID, &cs.ActiveColor, &cs.Image, &cs.Status, &cs.UpdatedAt); err != nil {
+			return nil, err
+		}
+		states = append(states, cs)
+	}
+	return states, nil
 }
