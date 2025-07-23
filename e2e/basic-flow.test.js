@@ -46,7 +46,7 @@ describe("Dockswap E2E - Basic Flow", () => {
         logSuccess("Initial deployment completed");
 
         // 2. Verify container is running
-        log("Verifying container is running...");
+        logStep("Verifying container is running...");
         const containerCheck = await run(
             `docker ps --filter "label=dockswap.managed=true" --format "{{.Names}}\t{{.Status}}"`,
             { silent: true }
@@ -60,13 +60,13 @@ describe("Dockswap E2E - Basic Flow", () => {
         logSuccess(`Container running: ${runningContainers[0]}`);
 
         // 3. Test HTTP endpoint
-        log(`Testing HTTP endpoint on port ${port}...`);
+        logStep(`Testing HTTP endpoint on port ${port}...`);
         const endpointResult = await checkEndpoint(`http://localhost:${port}`);
         expect(endpointResult.success).toBe(true);
         logSuccess(`HTTP endpoint responding correctly (${endpointResult.status})`);
 
         // 4. Test status reporting
-        log("Checking deployment status...");
+        logStep("Checking deployment status...");
         const statusResult = await run(`${DOCKSWAP_BIN} status ${TEST_APP}`);
         expect(statusResult.success).toBe(true);
 
@@ -86,13 +86,13 @@ describe("Dockswap E2E - Basic Flow", () => {
         const targetColor = activeColor === 'blue' ? 'green' : 'blue';
         const targetPort = targetColor === 'blue' ? BLUE_PORT : GREEN_PORT;
 
-        log(`Deploying to ${targetColor} (current active: ${activeColor})...`);
+        logStep(`Deploying to ${targetColor} (current active: ${activeColor})...`);
         const secondDeployResult = await run(`${DOCKSWAP_BIN} deploy ${TEST_APP} ${TEST_IMAGE}`);
         expect(secondDeployResult.success).toBe(true);
         logSuccess(`Deployment to ${targetColor} completed`);
 
         // 6. Verify both containers are running
-        log("Verifying both containers are running...");
+        logStep("Verifying both containers are running...");
         const secondContainerCheck = await run(
             `docker ps --filter "label=dockswap.managed=true" --format "{{.Names}}\t{{.Status}}"`,
             { silent: true }
@@ -102,7 +102,7 @@ describe("Dockswap E2E - Basic Flow", () => {
         logSuccess(`Both containers running: ${secondRunningContainers.map(c => c.split('\t')[0]).join(', ')}`);
 
         // 7. Test both endpoints
-        log("Testing both HTTP endpoints...");
+        logStep("Testing both HTTP endpoints...");
         const blueResult = await checkEndpoint(`http://localhost:${BLUE_PORT}`);
         const greenResult = await checkEndpoint(`http://localhost:${GREEN_PORT}`);
         expect(blueResult.success).toBe(true);
@@ -110,13 +110,13 @@ describe("Dockswap E2E - Basic Flow", () => {
         logSuccess(`Both endpoints responding - Blue: ${blueResult.status}, Green: ${greenResult.status}`);
 
         // 8. Test traffic switching
-        log(`Switching traffic to ${targetColor}...`);
+        logStep(`Switching traffic to ${targetColor}...`);
         const switchResult = await run(`${DOCKSWAP_BIN} switch ${TEST_APP} ${targetColor}`);
         expect(switchResult.success).toBe(true);
         logSuccess(`Traffic switched to ${targetColor}`);
 
         // 9. Verify status shows new active color
-        log("Verifying status update...");
+        logStep("Verifying status update...");
         const newStatusResult = await run(`${DOCKSWAP_BIN} status ${TEST_APP}`, { silent: true });
         expect(newStatusResult.success).toBe(true);
 
@@ -126,7 +126,7 @@ describe("Dockswap E2E - Basic Flow", () => {
         logSuccess(`Status correctly shows active color: ${newActiveColor}`);
 
         // 10. Final verification
-        log("Performing final verification...");
+        logStep("Performing final verification...");
         const finalPort = newActiveColor === 'blue' ? BLUE_PORT : GREEN_PORT;
         const finalEndpointCheck = await checkEndpoint(`http://localhost:${finalPort}`);
         expect(finalEndpointCheck.success).toBe(true);

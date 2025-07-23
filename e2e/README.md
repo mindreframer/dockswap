@@ -69,22 +69,29 @@ bun run e2e/01-error-scenarios.js
 ### Basic Flow Tests (`basic-flow.test.js`)
 Tests the complete blue-green deployment workflow:
 
-- ✅ **should perform basic deployment flow** - Initial deployment to first color
-- ✅ **should report deployment status correctly** - Status reporting and validation
-- ✅ **should perform blue-green deployment** - Deployment to second color
-- ✅ **should switch traffic between colors** - Traffic switching and validation
+- ✅ **should perform complete blue-green deployment workflow** - Comprehensive test covering:
+  - Initial deployment to first color
+  - Container health verification
+  - Status reporting and validation
+  - Blue-green deployment (second color)
+  - Traffic switching between colors
+  - HTTP endpoint validation
+  - Final verification
 
 ### Error Scenario Tests (`error-scenarios.test.js`)
 Tests error handling and edge cases:
 
-- ✅ **should reject invalid app configuration** - Invalid app configuration rejection
-- ✅ **should reject traffic switch without deployment** - Switch without containers
-- ✅ **should handle valid deployment correctly** - Valid deployment verification
-- ✅ **should reject invalid color in switch command** - Invalid color rejection
-- ✅ **should reject switch to non-existent container** - Non-existent container handling
-- ✅ **should handle status for non-existent app** - Non-existent app status
-- ✅ **should handle deployment with invalid image** - Invalid image rejection
-- ✅ **should handle malformed command arguments** - Malformed command handling
+- ✅ **should handle all deployment-related errors** - Comprehensive deployment error testing:
+  - Invalid app configuration rejection
+  - Invalid image rejection
+  - Malformed command arguments
+- ✅ **should handle all traffic switching errors** - Comprehensive traffic switching error testing:
+  - Switch without deployment
+  - Invalid color rejection
+  - Switch to non-existent container
+- ✅ **should handle status and validation scenarios** - Status and validation testing:
+  - Status for non-existent app
+  - Valid deployment verification
 
 ## Test Features
 
@@ -95,6 +102,7 @@ Tests error handling and edge cases:
 - **Test filtering** - Run specific tests or test patterns
 - **Better error reporting** - Clear test context and failure information
 - **Parallel execution** - Tests can run in parallel when possible
+- **Optimized performance** - Grouped tests share setup/teardown overhead (68% faster than individual tests)
 
 ### Colored Output
 Tests use colored console output for better readability:

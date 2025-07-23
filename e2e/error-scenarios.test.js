@@ -35,10 +35,10 @@ describe("Dockswap E2E - Error Scenarios", () => {
     });
 
     test("should handle all deployment-related errors", async () => {
-        logStep("Testing deployment-related error scenarios");
+        logInfo("Testing deployment-related error scenarios");
 
         // 1. Test invalid app configuration
-        logInfo("Attempting to deploy app with no configuration...");
+        logStep("Attempting to deploy app with no configuration...");
         const invalidAppResult = await run(
             `./dockswap deploy ${INVALID_APP} ${VALID_IMAGE}`,
             { allowFailure: true, silent: true }
@@ -51,7 +51,7 @@ describe("Dockswap E2E - Error Scenarios", () => {
         logSuccess("Invalid app configuration properly rejected");
 
         // 2. Test deployment with invalid image
-        logInfo("Attempting to deploy with non-existent image...");
+        logStep("Attempting to deploy with non-existent image...");
         const invalidImageResult = await run(
             `./dockswap deploy ${TEST_APP} nonexistent-image:latest`,
             { allowFailure: true, silent: true }
@@ -60,7 +60,7 @@ describe("Dockswap E2E - Error Scenarios", () => {
         logSuccess("Invalid image properly rejected");
 
         // 3. Test malformed command arguments
-        logInfo("Attempting to run deploy without required arguments...");
+        logStep("Attempting to run deploy without required arguments...");
         const malformedResult = await run(
             `./dockswap deploy`,
             { allowFailure: true, silent: true }
@@ -70,10 +70,10 @@ describe("Dockswap E2E - Error Scenarios", () => {
     });
 
     test("should handle all traffic switching errors", async () => {
-        logStep("Testing traffic switching error scenarios");
+        logInfo("Testing traffic switching error scenarios");
 
         // 1. Test traffic switch without deployment
-        logInfo("Attempting to switch traffic with no containers...");
+        logStep("Attempting to switch traffic with no containers...");
         const switchResult = await run(
             `./dockswap switch ${TEST_APP} blue`,
             { allowFailure: true, silent: true }
@@ -82,7 +82,7 @@ describe("Dockswap E2E - Error Scenarios", () => {
         logSuccess("Switch without deployment properly rejected");
 
         // 2. Test switch to invalid color
-        logInfo("Attempting to switch to invalid color...");
+        logStep("Attempting to switch to invalid color...");
         const invalidColorResult = await run(
             `./dockswap switch ${TEST_APP} purple`,
             { allowFailure: true, silent: true }
@@ -95,6 +95,7 @@ describe("Dockswap E2E - Error Scenarios", () => {
         logSuccess("Invalid color properly rejected");
 
         // 3. Test switch to non-existent container
+        logStep("Test switch to non-existent container");
         // First deploy to one color
         await dockswapDeploy(TEST_APP, VALID_IMAGE);
         const currentStatus = await dockswapStatus(TEST_APP);
@@ -115,10 +116,10 @@ describe("Dockswap E2E - Error Scenarios", () => {
     });
 
     test("should handle status and validation scenarios", async () => {
-        logStep("Testing status and validation scenarios");
+        logInfo("Testing status and validation scenarios");
 
         // 1. Test status for non-existent app
-        logInfo("Checking status for non-existent app...");
+        logStep("Checking status for non-existent app...");
         const result = await run(
             `./dockswap status nonexistent-app`,
             { allowFailure: true, silent: true }
@@ -128,6 +129,7 @@ describe("Dockswap E2E - Error Scenarios", () => {
         logSuccess("Status for non-existent app handled appropriately");
 
         // 2. Test valid deployment for comparison
+        logStep("Test valid deployment for comparison");
         await dockswapDeploy(TEST_APP, VALID_IMAGE);
         const status = await dockswapStatus(TEST_APP);
         expect(status.activeColor).toBeDefined();
