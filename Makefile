@@ -76,15 +76,15 @@ test-coverage:
 	@go tool cover -func=coverage.out
 
 # E2E test targets
-test-e2e:
+test-e2e: build
 	@echo "Running E2E tests..."
 	@bun test e2e/*.test.js --timeout=30000
 
-test-e2e-basic:
+test-e2e-basic: build
 	@echo "Running basic flow E2E tests..."
 	@bun test e2e/basic-flow.test.js --timeout=30000
 
-test-e2e-error:
+test-e2e-error: build
 	@echo "Running error scenario E2E tests..."
 	@bun test e2e/error-scenarios.test.js --timeout=30000
 
