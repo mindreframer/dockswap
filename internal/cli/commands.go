@@ -107,15 +107,28 @@ func (c *CLI) handleDeploy(args []string) error {
 	}
 
 	fmt.Println("✓ Container healthy and ready")
-	fmt.Printf("✓ Deployment complete - traffic still on %s\n", activeColor)
-	fmt.Printf("Run 'dockswap switch %s %s' to switch traffic\n", appName, targetColor)
+	if cs == nil {
+		// First deployment
+		fmt.Printf("✓ Initial deployment complete - traffic active on %s\n", targetColor)
+	} else {
+		// Subsequent deployment
+		fmt.Printf("✓ Deployment complete - traffic still on %s\n", activeColor)
+		fmt.Printf("Run 'dockswap switch %s %s' to switch traffic\n", appName, targetColor)
+	}
 
 	// Update database state
 	depID, err := state.InsertDeployment(c.DB, appName, 1, image, "ready", targetColor, nil)
 	if err != nil {
 		fmt.Printf("Warning: failed to update database: %v\n", err)
 	} else {
-		state.UpsertCurrentState(c.DB, appName, depID, activeColor, image, "ready")
+		// For first deployment, make the deployed color active
+		// For subsequent deployments, keep current active until manual switch
+		dbActiveColor := activeColor
+		if cs == nil {
+			// First deployment - make deployed color active
+			dbActiveColor = targetColor
+		}
+		state.UpsertCurrentState(c.DB, appName, depID, dbActiveColor, image, "ready")
 	}
 
 	return nil
