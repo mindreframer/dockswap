@@ -13,13 +13,25 @@ export const colors = {
   dim: "\x1b[2m"
 };
 
+// Step counter for auto-incrementing steps
+let stepCounter = 0;
+
 // Logging utilities
 export function log(message, color = colors.reset) {
   console.log(`${color}${message}${colors.reset}`);
 }
 
-export function logStep(step, message) {
-  log(`${colors.bold}[STEP ${step}]${colors.reset} ${colors.blue}${message}${colors.reset}`);
+export function logStep(message) {
+  stepCounter++;
+  // Debug: Check both counter and message
+  console.log(`DEBUG: stepCounter=${stepCounter}, message="${message}"`);
+  const stepNum = stepCounter;
+  const stepMessage = `${colors.bold}[STEP ${stepNum}]${colors.reset} ${colors.blue}${message}${colors.reset}`;
+  console.log(stepMessage);
+}
+
+export function resetStepCounter() {
+  stepCounter = 0;
 }
 
 export function logSuccess(message) {

@@ -1,28 +1,29 @@
 #!/usr/bin/env bun
-import { $ } from "bun";
 import { 
-  log, logStep, logSuccess, logError, logWarning, logInfo,
-  run, checkEndpoint, setupE2EEnvironment, teardownE2EEnvironment,
-  dockswapDeploy, dockswapSwitch, dockswapStatus,
-  assertEqual, assertTrue, colors
+  log, logStep, logSuccess, logError, logInfo,
+  run, setupE2EEnvironment, teardownE2EEnvironment,
+  dockswapDeploy, dockswapStatus,
+  assertTrue, colors, resetStepCounter
 } from './utils.js';
 
 // Test configuration
 const TEST_APP = "nginx-test"; // Use existing config
 const INVALID_APP = "error-test"; // Non-existent app for error testing
-const INVALID_IMAGE = "nonexistent:invalid";
 const VALID_IMAGE = "nginx:alpine";
 
 // Main test execution
 async function main() {
   const startTime = Date.now();
   
+  // Reset step counter for this test
+  resetStepCounter();
+  
   log(`${colors.bold}${colors.blue}🧪 Testing Error Scenarios${colors.reset}`);
   log(`${colors.yellow}Testing error handling and edge cases${colors.reset}\n`);
   
   try {
     // Setup
-    logStep(1, "Setting up test environment");
+    logStep("Setting up test environment");
     await setupE2EEnvironment({ 
       buildDockswap: true,
       pullImages: [VALID_IMAGE],
@@ -30,7 +31,7 @@ async function main() {
     });
     
     // Test invalid app configuration
-    logStep(2, "Testing invalid app configuration");
+    logStep("Testing invalid app configuration");
     logInfo("Attempting to deploy app with no configuration...");
     const invalidAppResult = await run(
       `./dockswap deploy ${INVALID_APP} ${VALID_IMAGE}`,
@@ -46,7 +47,7 @@ async function main() {
     logSuccess("Invalid app configuration properly rejected");
     
     // Test switch without deployment
-    logStep(3, "Testing traffic switch without deployment");
+    logStep("Testing traffic switch without deployment");
     logInfo("Attempting to switch traffic with no containers...");
     const switchResult = await run(
       `./dockswap switch ${TEST_APP} blue`,
@@ -57,7 +58,7 @@ async function main() {
     logSuccess("Switch without deployment properly rejected");
     
     // Test valid deployment
-    logStep(4, "Testing valid deployment for comparison");
+    logStep("Testing valid deployment for comparison");
     await dockswapDeploy(TEST_APP, VALID_IMAGE);
     
     const status = await dockswapStatus(TEST_APP);
@@ -65,7 +66,7 @@ async function main() {
     logSuccess("Valid deployment works as expected");
     
     // Test switching to invalid color
-    logStep(5, "Testing switch to invalid color");
+    logStep("Testing switch to invalid color");
     logInfo("Attempting to switch to invalid color...");
     const invalidColorResult = await run(
       `./dockswap switch ${TEST_APP} purple`,
@@ -81,7 +82,7 @@ async function main() {
     logSuccess("Invalid color properly rejected");
     
     // Test switching to non-existent container
-    logStep(6, "Testing switch to non-existent container");
+    logStep("Testing switch to non-existent container");
     const currentStatus = await dockswapStatus(TEST_APP);
     const otherColor = currentStatus.activeColor === 'blue' ? 'green' : 'blue';
     
@@ -99,9 +100,9 @@ async function main() {
     logSuccess("Switch to non-existent container properly rejected");
     
     // Test status for non-existent app
-    logStep(7, "Testing status for non-existent app");
+    logStep("Testing status for non-existent app");
     logInfo("Checking status for non-existent app...");
-    const noAppStatusResult = await run(
+    await run(
       `./dockswap status nonexistent-app`,
       { allowFailure: true, silent: true }
     );
