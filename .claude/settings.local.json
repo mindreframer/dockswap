@@ -8,7 +8,8 @@
       "Bash(ls:*)",
       "Bash(find:*)",
       "Bash(go:*)",
-      "Bash(make:*)"
+      "Bash(make:*)",
+      "Bash(cp /Users/roman/Desktop/work/prj.memomoo/dockswap/internal/docker/client.go /Users/roman/Desktop/work/prj.memomoo/dockswap/internal/docker/client.go.backup)"
     ],
     "deny": []
   }
