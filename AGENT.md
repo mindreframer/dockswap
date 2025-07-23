@@ -16,10 +16,10 @@
 ---
 
 ### Expectations & Status
-
-- **Current Phase:** Configuration system and Docker logic are implemented, but the CLI only prints stub output (no real deployments yet).
-- **Next Steps:** Wire up CLI commands to real Docker and deployment logic, then implement Caddy integration and persistent state.
-- **Testing:** No formal test framework; some unit tests exist for Docker logic.
+- work in small, incremental steps
+- make sure code compiles
+- implement tests along each features
+- make sure tests are passing
 
 ---
 
