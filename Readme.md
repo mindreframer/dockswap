@@ -1,105 +1,86 @@
 # Dockswap
 
-Dockswap is a blue-green deployment tool designed for containerized applications. It provides zero-downtime deployments with robust health checking, connection draining, and seamless Docker integration. Dockswap is written in Go and operates as a single binary, making it easy to deploy and manage across Linux-based environments.
+Dockswap is a blue-green deployment CLI tool for containerized applications. It provides zero-downtime deployments with robust health checking, connection draining, and seamless Docker integration. Dockswap is written in Go and operates as a single binary, making it easy to use across Linux-based environments.
 
 ---
 
 ## Key Features
 
-- Zero-downtime deployments: Safely switch between blue and green environments with connection draining.
-- Tight Docker integration: Manages containers directly using the Docker API.
-- Health checks: Automated, configurable HTTP health checks before promoting new containers.
-- Reverse proxy: Handles HTTP and WebSocket traffic, routing requests to the active environment.
-- Configuration: Simple YAML files for per-application settings.
-- Persistence: Uses SQLite for state, deployment history, and health check results.
-- API and CLI: Provides both a REST API and a command-line interface for operational tasks.
+- **Zero-downtime deployments:** Safely switch between blue and green environments with connection draining.
+- **Tight Docker integration:** Manages containers directly using the Docker API.
+- **Health checks:** Automated, configurable HTTP health checks before promoting new containers.
+- **Caddy integration:** Uses Caddy as a reverse proxy to switch HTTP/WebSocket traffic between blue/green environments.
+- **Simple configuration:** Per-app YAML files in a dedicated config directory.
+- **Persistence:** Uses SQLite for state, deployment history, and health check results.
+- **CLI-first:** All operations are performed via the command-line interface.
 
 ---
 
 ## How Dockswap Works
 
-Dockswap manages two sets of containers (blue and green) for each application. When a new deployment is triggered, it starts the standby environment, runs health checks, and only switches traffic if the new version is healthy. Active connections are drained before the old environment is stopped, ensuring zero downtime.
+Dockswap manages two sets of containers (blue and green) for each application. When a new deployment is triggered, it starts the standby environment, runs health checks, and only switches traffic (via Caddy) if the new version is healthy. Active connections are drained before the old environment is stopped, ensuring zero downtime.
 
 ---
 
 ## Example Usage Flow
 
-### 1. Define Application Configuration
+### 1. Prepare the Config Directory
 
-Create a YAML file for your application (e.g., `/etc/blue-green/apps/web-api.yaml`):
+Create a config directory (e.g., `~/dockswap-cfg/`). Dockswap expects the following structure:
+
+```
+~/dockswap-cfg/
+├── apps/
+│   └── web-api.yaml
+├── state/
+└── caddy/
+```
+
+### 2. Define Application Configuration
+
+Each app has its own YAML file in `apps/`. Example (`apps/web-api.yaml`):
 
 ```yaml
 name: "web-api"
-image: "myapp:latest"
-ports:
-  proxy: 8000
-  blue: 18000
-  green: 18001
-health_check:
-  path: "/health"
-  method: "GET"
-  timeout: "5s"
-  interval: "2s"
-  healthy_threshold: 3
-  unhealthy_threshold: 2
-  expected_status: 200
 docker:
-  environment:
-    - "DATABASE_URL=postgres://user:pass@host:5432/db"
-  volumes:
-    - "/host/data:/app/data:rw"
   memory_limit: "512m"
-  cpu_limit: "0.5"
-deployment:
-  drain_timeout: "30s"
-  startup_timeout: "60s"
-  health_check_timeout: "120s"
+  environment:
+    DATABASE_URL: "postgres://localhost/webapi"
+  expose_port: 8080
+ports:
+  blue: 8081
+  green: 8082
+health_check:
+  endpoint: "/health"
+  timeout: "5s"
+  retries: 3
 ```
 
-### 2. Start Dockswap
+### 3. Run Dockswap CLI
 
 ```sh
-dockswap --config-dir /etc/blue-green/apps
+dockswap --config ~/dockswap-cfg
 ```
 
-Dockswap will load all application configurations, initialize the database, and start listening on the configured proxy ports.
+- Dockswap will auto-create missing folders (`apps/`, `state/`, `caddy/`) if needed.
+- It will validate all YAML files in `apps/` for correctness.
+- The SQLite DB will be stored at `~/dockswap-cfg/dockswap.db`.
 
-### 3. Deploy a New Version
-
-You can trigger a deployment using the CLI or API.
-
-CLI Example:
+### 4. Deploy a New Version
 
 ```sh
 dockswap deploy web-api myapp:v1.2.3
 ```
 
-API Example:
+Dockswap will pull the new image, start the standby container, run health checks, and switch Caddy traffic if healthy.
 
-```sh
-curl -X POST http://localhost:8080/api/apps/web-api/deploy \
-  -d '{"desired_image": "myapp:v1.2.3"}'
-```
-
-Dockswap will pull the new image, start the standby container, run health checks, and switch traffic if healthy.
-
-### 4. Check Status
-
-CLI:
+### 5. Check Status
 
 ```sh
 dockswap status web-api
 ```
 
-API:
-
-```sh
-curl http://localhost:8080/api/apps/web-api/status
-```
-
-### 5. Rollback or Manual Switch
-
-If needed, you can manually switch traffic or rollback:
+### 6. Rollback or Manual Switch
 
 ```sh
 dockswap switch web-api blue
@@ -113,15 +94,16 @@ dockswap switch web-api blue
 - Docker daemon
 - Go (for building from source) or prebuilt binary
 - SQLite (bundled, no external database required)
+- Caddy (for HTTP proxying; managed by Dockswap)
 
 ---
 
 ## Getting Started
 
 1. Install Dockswap (build from source or download a release).
-2. Write YAML configuration files for your applications.
-3. Start the Dockswap binary, pointing to your config directory.
-4. Use the CLI or API to manage deployments and monitor status.
+2. Create a config directory and write YAML configuration files for your applications in `apps/`.
+3. Run the Dockswap CLI, pointing to your config directory.
+4. Use the CLI to manage deployments and monitor status.
 
 For detailed requirements, design, and implementation plan, see the `@spec/0-init/` folder.
 
