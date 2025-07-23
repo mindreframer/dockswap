@@ -1,0 +1,32 @@
+Caddy Integration Questions
+
+  1. Caddy Management Approach:
+  - Should dockswap manage a single shared Caddy instance for all apps, or spawn individual Caddy processes per app?
+  - Do you want dockswap to automatically start/stop Caddy, or assume it's already running?
+
+  2. Configuration Strategy:
+  - Should dockswap generate Caddy configuration files dynamically, or use Caddy's admin API to configure routes at runtime?
+  - Where should Caddy config files be stored? (e.g., dockswap-cfg/caddy/ subdirectory?)
+
+  3. Blue-Green Switching:
+  - How should traffic switching work? Should dockswap update Caddy config and reload, or use the admin API for zero-downtime switches?
+  - Do you want gradual traffic shifting (e.g., 10% → 50% → 100%) or instant switches?
+
+  4. Health Check Integration:
+  - Should Caddy's health checks be separate from dockswap's health checks, or should dockswap configure Caddy's health checking?
+  - How should failed health checks affect Caddy routing?
+
+  5. Port Management:
+  - Looking at the config, each app has proxy.listen_port. Should each app get its own Caddy instance listening on that port, or should
+  there be one Caddy with multiple virtual hosts?
+  - How should dockswap handle port conflicts between apps?
+
+  6. Configuration Format:
+  - Should dockswap generate Caddyfile format or JSON config?
+  - Do you need support for custom Caddy directives/plugins?
+
+  7. Process Management:
+  - Should dockswap spawn Caddy as child processes, use systemd integration, or expect external Caddy management?
+  - How should dockswap handle Caddy crashes or restarts?
+
+  What's your preferred approach for these aspects?

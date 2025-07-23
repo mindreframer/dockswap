@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"dockswap/internal/caddy"
 	"dockswap/internal/config"
 	"dockswap/internal/state"
 
@@ -16,15 +17,18 @@ type Workspace struct {
 	Root     string                       `json:"root"`
 	AppsDir  string                       `json:"apps_dir"`
 	StateDir string                       `json:"state_dir"`
+	CaddyDir string                       `json:"caddy_dir"`
 	DBPath   string                       `json:"db_path"`
 	DB       *sql.DB                      `json:"-"`
 	Configs  map[string]*config.AppConfig `json:"-"`
 	States   map[string]*state.AppState   `json:"-"`
+	CaddyMgr *caddy.CaddyManager          `json:"-"`
 }
 
 const (
 	AppsSubdir  = "apps"
 	StateSubdir = "state"
+	CaddySubdir = "caddy"
 	DBFilename  = "dockswap.db"
 )
 
@@ -51,6 +55,7 @@ func InitializeWorkspace(rootPath string) (*Workspace, error) {
 		Root:     rootPath,
 		AppsDir:  filepath.Join(rootPath, AppsSubdir),
 		StateDir: filepath.Join(rootPath, StateSubdir),
+		CaddyDir: filepath.Join(rootPath, CaddySubdir),
 		DBPath:   filepath.Join(rootPath, DBFilename),
 		Configs:  make(map[string]*config.AppConfig),
 		States:   make(map[string]*state.AppState),
@@ -64,6 +69,10 @@ func InitializeWorkspace(rootPath string) (*Workspace, error) {
 		return nil, fmt.Errorf("failed to initialize database: %w", err)
 	}
 
+	if err := workspace.initializeCaddy(); err != nil {
+		return nil, fmt.Errorf("failed to initialize caddy: %w", err)
+	}
+
 	return workspace, nil
 }
 
@@ -72,6 +81,7 @@ func LoadWorkspace(rootPath string) (*Workspace, error) {
 		Root:     rootPath,
 		AppsDir:  filepath.Join(rootPath, AppsSubdir),
 		StateDir: filepath.Join(rootPath, StateSubdir),
+		CaddyDir: filepath.Join(rootPath, CaddySubdir),
 		DBPath:   filepath.Join(rootPath, DBFilename),
 		Configs:  make(map[string]*config.AppConfig),
 		States:   make(map[string]*state.AppState),
@@ -83,6 +93,10 @@ func LoadWorkspace(rootPath string) (*Workspace, error) {
 
 	if err := workspace.openDatabase(); err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
+	}
+
+	if err := workspace.initializeCaddy(); err != nil {
+		return nil, fmt.Errorf("failed to initialize caddy: %w", err)
 	}
 
 	if err := workspace.RefreshWorkspace(); err != nil {
@@ -196,7 +210,7 @@ func (w *Workspace) Close() error {
 }
 
 func (w *Workspace) createDirectoryStructure() error {
-	dirs := []string{w.Root, w.AppsDir, w.StateDir}
+	dirs := []string{w.Root, w.AppsDir, w.StateDir, w.CaddyDir}
 
 	for _, dir := range dirs {
 		if err := os.MkdirAll(dir, 0755); err != nil {
@@ -351,4 +365,47 @@ func fileExists(path string) (bool, error) {
 		return false, err
 	}
 	return !info.IsDir(), nil
+}
+
+func (w *Workspace) initializeCaddy() error {
+	configPath := filepath.Join(w.CaddyDir, "config.json")
+	templatePath := filepath.Join(w.CaddyDir, "template.json")
+
+	w.CaddyMgr = caddy.New(configPath, templatePath)
+
+	if !w.CaddyMgr.HasTemplate() {
+		if err := w.CaddyMgr.CreateDefaultTemplate(); err != nil {
+			return fmt.Errorf("failed to create default caddy template: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (w *Workspace) UpdateCaddyConfig() error {
+	if w.CaddyMgr == nil {
+		return fmt.Errorf("caddy manager not initialized")
+	}
+
+	if err := w.CaddyMgr.GenerateConfig(w.Configs, w.States); err != nil {
+		return fmt.Errorf("failed to generate caddy config: %w", err)
+	}
+
+	if err := w.CaddyMgr.ReloadCaddy(); err != nil {
+		return fmt.Errorf("failed to reload caddy: %w", err)
+	}
+
+	return nil
+}
+
+func (w *Workspace) ValidateCaddy() error {
+	if w.CaddyMgr == nil {
+		return fmt.Errorf("caddy manager not initialized")
+	}
+
+	return w.CaddyMgr.ValidateCaddyRunning()
+}
+
+func (w *Workspace) GetCaddyManager() *caddy.CaddyManager {
+	return w.CaddyMgr
 }
