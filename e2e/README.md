@@ -1,6 +1,6 @@
 # End-to-End Tests
 
-This directory contains comprehensive end-to-end tests for dockswap using Bun.sh.
+This directory contains comprehensive end-to-end tests for dockswap using Bun's test framework.
 
 ## Prerequisites
 
@@ -10,48 +10,91 @@ This directory contains comprehensive end-to-end tests for dockswap using Bun.sh
 
 ## Running Tests
 
-### Basic Flow Test
-Tests the complete blue-green deployment workflow:
+### Using Bun Test Framework (Recommended)
 
+The tests have been converted to use Bun's test framework with proper `describe`, `test`, `beforeEach`, and `afterEach` hooks.
+
+#### Run All E2E Tests
 ```bash
-bun run e2e/00-basic-flow.js
+bun test e2e/*.test.js --timeout=30000
 ```
 
-This test covers:
-- ✅ Initial deployment to first color
-- ✅ Container health verification
-- ✅ Status reporting
-- ✅ Blue-green deployment (second color)
-- ✅ Traffic switching between colors
-- ✅ HTTP endpoint validation
-- ✅ Cleanup
+#### Run Specific Test Files
+```bash
+# Basic flow tests
+bun test e2e/basic-flow.test.js --timeout=30000
 
-### Error Scenarios Test
-Tests error handling and edge cases:
+# Error scenario tests
+bun test e2e/error-scenarios.test.js --timeout=30000
+```
+
+#### Run Tests with Pattern Matching
+```bash
+# Run only basic flow tests
+bun test e2e/basic-flow.test.js
+
+# Run only error tests
+bun test e2e/error-scenarios.test.js
+
+# Run tests matching a pattern
+bun test e2e/ --test-name-pattern "deployment"
+```
+
+### Legacy Scripts (Deprecated)
+
+The original manual scripts are still available for reference:
 
 ```bash
+# Basic flow test (legacy)
+bun run e2e/00-basic-flow.js
+
+# Error scenarios test (legacy)
 bun run e2e/01-error-scenarios.js
 ```
 
-This test covers:
-- ✅ Invalid app configuration rejection
-- ✅ Traffic switch without deployment
-- ✅ Switch to invalid color rejection
-- ✅ Switch to non-existent container rejection  
-- ✅ Status handling for non-existent apps
-- ✅ Proper error messages and codes
+## Test Structure
 
-### Run All Tests
-```bash
-bun run e2e/00-basic-flow.js && bun run e2e/01-error-scenarios.js
-```
+### New Test Framework Files
+- `basic-flow.test.js` - Complete basic deployment workflow using Bun test framework
+- `error-scenarios.test.js` - Error handling and edge cases using Bun test framework
+- `test.config.js` - Test configuration and settings
 
-### Test Structure
-
-- `00-basic-flow.js` - Complete basic deployment workflow
+### Legacy Files (for reference)
+- `00-basic-flow.js` - Original basic deployment workflow
+- `01-error-scenarios.js` - Original error scenarios test
 - `utils.js` - Shared utilities and helpers
 
+## Test Categories
+
+### Basic Flow Tests (`basic-flow.test.js`)
+Tests the complete blue-green deployment workflow:
+
+- ✅ **should perform basic deployment flow** - Initial deployment to first color
+- ✅ **should report deployment status correctly** - Status reporting and validation
+- ✅ **should perform blue-green deployment** - Deployment to second color
+- ✅ **should switch traffic between colors** - Traffic switching and validation
+
+### Error Scenario Tests (`error-scenarios.test.js`)
+Tests error handling and edge cases:
+
+- ✅ **should reject invalid app configuration** - Invalid app configuration rejection
+- ✅ **should reject traffic switch without deployment** - Switch without containers
+- ✅ **should handle valid deployment correctly** - Valid deployment verification
+- ✅ **should reject invalid color in switch command** - Invalid color rejection
+- ✅ **should reject switch to non-existent container** - Non-existent container handling
+- ✅ **should handle status for non-existent app** - Non-existent app status
+- ✅ **should handle deployment with invalid image** - Invalid image rejection
+- ✅ **should handle malformed command arguments** - Malformed command handling
+
 ## Test Features
+
+### Bun Test Framework Benefits
+- **Proper test isolation** - Each test runs in isolation with setup/teardown
+- **Better test discovery** - Tests are automatically discovered and organized
+- **Individual test timing** - Each test shows its execution time
+- **Test filtering** - Run specific tests or test patterns
+- **Better error reporting** - Clear test context and failure information
+- **Parallel execution** - Tests can run in parallel when possible
 
 ### Colored Output
 Tests use colored console output for better readability:
@@ -62,9 +105,10 @@ Tests use colored console output for better readability:
 - 🟣 **Cyan**: Info messages
 
 ### Error Handling
-- Comprehensive error reporting
+- Comprehensive error reporting with test context
 - Automatic cleanup on failure
 - Detailed logging of all operations
+- Proper test isolation
 
 ### HTTP Validation
 - Endpoint health checking with retries
@@ -76,14 +120,23 @@ Tests use colored console output for better readability:
 - Automatic cleanup of test containers
 - Image pulling and verification
 
+## Test Configuration
+
+The `test.config.js` file contains:
+- Default timeout settings (30 seconds for e2e tests)
+- Test categories and descriptions
+- Environment settings
+- Test app configurations
+
 ## Utilities (utils.js)
 
 ### Logging Functions
 - `log(message, color)` - Basic logging with color
-- `logStep(step, message)` - Step headers
+- `logStep(message)` - Step headers with auto-incrementing numbers
 - `logSuccess(message)` - Success messages
 - `logError(message)` - Error messages
 - `logWarning(message)` - Warning messages
+- `logInfo(message)` - Info messages
 
 ### Shell Execution
 - `run(command, options)` - Execute shell commands with error handling
@@ -114,12 +167,39 @@ Tests use colored console output for better readability:
 
 ## Writing New Tests
 
-1. Create a new `.js` file in the `e2e/` directory
-2. Import utilities: `import { log, run, checkEndpoint } from './utils.js'`
-3. Use the helper functions for consistent testing
-4. Follow the pattern of setup → test → cleanup
+### Using Bun Test Framework (Recommended)
+
+1. Create a new `.test.js` file in the `e2e/` directory
+2. Import Bun test functions and utilities
+3. Use `describe` and `test` blocks for organization
+4. Use `beforeEach` and `afterEach` for setup/teardown
 
 Example:
+```javascript
+#!/usr/bin/env bun
+import { describe, test, beforeEach, afterEach, expect } from "bun:test";
+import { log, logStep, run, setupE2EEnvironment, teardownE2EEnvironment } from './utils.js';
+
+describe("My Feature Tests", () => {
+  beforeEach(async () => {
+    await setupE2EEnvironment({ pullImages: ['nginx:alpine'] });
+  });
+
+  afterEach(async () => {
+    await teardownE2EEnvironment();
+  });
+
+  test("should perform my test", async () => {
+    logStep("Testing my feature");
+    // Your test logic here
+    expect(result).toBe(true);
+  });
+});
+```
+
+### Legacy Script Pattern (Deprecated)
+
+For reference, the old pattern was:
 ```javascript
 #!/usr/bin/env bun
 import { log, logStep, run, setupE2EEnvironment, teardownE2EEnvironment } from './utils.js';
@@ -128,7 +208,7 @@ async function main() {
   try {
     await setupE2EEnvironment({ pullImages: ['nginx:alpine'] });
     
-    logStep(1, "Testing custom feature");
+    logStep("Testing custom feature");
     // Your test logic here
     
     log("✅ Test passed!");
@@ -152,3 +232,4 @@ Tests are designed to be CI/CD friendly:
 - Structured output for parsing
 - Automatic cleanup regardless of test outcome
 - Configurable timeouts and retries
+- Proper test isolation and parallel execution support

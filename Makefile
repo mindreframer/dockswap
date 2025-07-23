@@ -25,9 +25,13 @@ help:
 	@echo "  build         Build the binary"
 	@echo "  clean         Remove build artifacts"
 	@echo "  install       Install the binary to GOPATH/bin"
-	@echo "  test          Run tests"
-	@echo "  test-verbose  Run tests with verbose output"
-	@echo "  test-coverage Run tests with coverage report"
+	@echo "  test          Run Go tests"
+	@echo "  test-verbose  Run Go tests with verbose output"
+	@echo "  test-coverage Run Go tests with coverage report"
+	@echo "  test-e2e      Run E2E tests"
+	@echo "  test-e2e-basic Run basic flow E2E tests"
+	@echo "  test-e2e-error Run error scenario E2E tests"
+	@echo "  test-all      Run all tests (Go + E2E)"
 	@echo "  fmt           Format Go code"
 	@echo "  vet           Run go vet"
 	@echo "  lint          Run golangci-lint (if available)"
@@ -70,6 +74,21 @@ test-coverage:
 	@go tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report generated: coverage.html"
 	@go tool cover -func=coverage.out
+
+# E2E test targets
+test-e2e:
+	@echo "Running E2E tests..."
+	@bun test e2e/*.test.js --timeout=30000
+
+test-e2e-basic:
+	@echo "Running basic flow E2E tests..."
+	@bun test e2e/basic-flow.test.js --timeout=30000
+
+test-e2e-error:
+	@echo "Running error scenario E2E tests..."
+	@bun test e2e/error-scenarios.test.js --timeout=30000
+
+test-all: test test-e2e
 
 # Development targets
 fmt:
