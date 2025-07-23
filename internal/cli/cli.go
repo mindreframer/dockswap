@@ -23,10 +23,10 @@ func New() *CLI {
 
 func (c *CLI) parseGlobalFlags(args []string) ([]string, error) {
 	var filteredArgs []string
-	
+
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
-		
+
 		if strings.HasPrefix(arg, "--config=") {
 			c.flags.Config = strings.TrimPrefix(arg, "--config=")
 		} else if arg == "--config" && i+1 < len(args) {
@@ -50,7 +50,7 @@ func (c *CLI) parseGlobalFlags(args []string) ([]string, error) {
 			filteredArgs = append(filteredArgs, arg)
 		}
 	}
-	
+
 	return filteredArgs, nil
 }
 
@@ -59,20 +59,20 @@ func (c *CLI) Run(args []string) error {
 		c.printHelp()
 		return nil
 	}
-	
+
 	filteredArgs, err := c.parseGlobalFlags(args)
 	if err != nil {
 		return err
 	}
-	
+
 	if len(filteredArgs) == 0 {
 		c.printHelp()
 		return nil
 	}
-	
+
 	command := filteredArgs[0]
 	commandArgs := filteredArgs[1:]
-	
+
 	switch command {
 	case "status":
 		return c.handleStatus(commandArgs)

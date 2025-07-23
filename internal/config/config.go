@@ -10,13 +10,13 @@ import (
 )
 
 type AppConfig struct {
-	Name        string     `yaml:"name"`
-	Description string     `yaml:"description"`
-	Docker      Docker     `yaml:"docker"`
-	Ports       Ports      `yaml:"ports"`
+	Name        string      `yaml:"name"`
+	Description string      `yaml:"description"`
+	Docker      Docker      `yaml:"docker"`
+	Ports       Ports       `yaml:"ports"`
 	HealthCheck HealthCheck `yaml:"health_check"`
-	Deployment  Deployment `yaml:"deployment"`
-	Proxy       Proxy      `yaml:"proxy"`
+	Deployment  Deployment  `yaml:"deployment"`
+	Proxy       Proxy       `yaml:"proxy"`
 }
 
 type Docker struct {
@@ -46,10 +46,10 @@ type HealthCheck struct {
 }
 
 type Deployment struct {
-	StartupDelay  time.Duration `yaml:"startup_delay"`
-	DrainTimeout  time.Duration `yaml:"drain_timeout"`
-	StopTimeout   time.Duration `yaml:"stop_timeout"`
-	AutoRollback  bool          `yaml:"auto_rollback"`
+	StartupDelay time.Duration `yaml:"startup_delay"`
+	DrainTimeout time.Duration `yaml:"drain_timeout"`
+	StopTimeout  time.Duration `yaml:"stop_timeout"`
+	AutoRollback bool          `yaml:"auto_rollback"`
 }
 
 type Proxy struct {
