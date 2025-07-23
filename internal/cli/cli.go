@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"database/sql"
 	"fmt"
 	"strconv"
 	"strings"
@@ -15,10 +16,12 @@ type GlobalFlags struct {
 
 type CLI struct {
 	flags GlobalFlags
+	DB    *sql.DB // Add DB handle for inspection commands
 }
 
-func New() *CLI {
-	return &CLI{}
+// New creates a CLI with a DB handle.
+func New(db *sql.DB) *CLI {
+	return &CLI{DB: db}
 }
 
 func (c *CLI) parseGlobalFlags(args []string) ([]string, error) {
@@ -80,6 +83,8 @@ func (c *CLI) Run(args []string) error {
 		return c.handleDeploy(commandArgs)
 	case "history":
 		return c.handleHistory(commandArgs)
+	case "events":
+		return c.handleEvents(commandArgs)
 	case "health":
 		return c.handleHealth(commandArgs)
 	case "switch":
