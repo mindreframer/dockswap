@@ -55,7 +55,7 @@ export async function run(command, { silent = false, allowFailure = false, timeo
   if (!silent) {
     log(`${colors.dim}$ ${command}${colors.reset}`);
   }
-  
+
   try {
     const result = await $`sh -c ${command}`.quiet(silent);
     return {
@@ -88,28 +88,28 @@ export async function checkEndpoint(url, expectedStatus = 200, timeout = 5000, r
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeout);
-      
-      const response = await fetch(url, { 
+
+      const response = await fetch(url, {
         signal: controller.signal,
         headers: { 'User-Agent': 'dockswap-e2e-test' }
       });
-      
+
       clearTimeout(timeoutId);
-      
+
       const result = {
         success: response.status === expectedStatus,
         status: response.status,
         url,
         attempt
       };
-      
+
       if (result.success || attempt === retries) {
         return result;
       }
-      
+
       // Wait before retry
       await new Promise(resolve => setTimeout(resolve, 1000));
-      
+
     } catch (error) {
       if (attempt === retries) {
         return {
@@ -120,7 +120,7 @@ export async function checkEndpoint(url, expectedStatus = 200, timeout = 5000, r
           error: error.message
         };
       }
-      
+
       // Wait before retry
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
@@ -134,7 +134,7 @@ export async function cleanupDockswapContainers() {
     `docker ps -aq --filter "label=dockswap.managed=true" | xargs -r docker stop 2>/dev/null | xargs -r docker rm 2>/dev/null`,
     { allowFailure: true, silent: true }
   );
-  
+
   const count = result.stdout.split('\n').filter(line => line.trim()).length;
   if (count > 0) {
     logSuccess(`Cleaned up ${count} containers`);
@@ -156,11 +156,11 @@ export async function getDockswapContainers() {
     `docker ps --filter "label=dockswap.managed=true" --format "{{.Names}}\t{{.Status}}\t{{.Ports}}"`,
     { silent: true }
   );
-  
+
   if (!result.success) {
     return [];
   }
-  
+
   return result.stdout
     .trim()
     .split('\n')
@@ -174,7 +174,7 @@ export async function getDockswapContainers() {
 export async function pullDockerImage(image) {
   logInfo(`Pulling Docker image: ${image}`);
   const result = await run(`docker pull ${image}`, { silent: true });
-  
+
   if (result.success) {
     logSuccess(`Image pulled: ${image}`);
   } else {
@@ -186,11 +186,11 @@ export async function pullDockerImage(image) {
 export async function dockswapDeploy(appName, image, dockswapBin = "./dockswap") {
   logInfo(`Deploying ${appName} with ${image}...`);
   const result = await run(`${dockswapBin} deploy ${appName} ${image}`);
-  
+
   if (!result.success) {
     throw new Error(`Deployment failed: ${result.stderr || result.stdout}`);
   }
-  
+
   logSuccess(`Deployed ${appName} successfully`);
   return result;
 }
@@ -198,29 +198,29 @@ export async function dockswapDeploy(appName, image, dockswapBin = "./dockswap")
 export async function dockswapSwitch(appName, color, dockswapBin = "./dockswap") {
   logInfo(`Switching ${appName} to ${color}...`);
   const result = await run(`${dockswapBin} switch ${appName} ${color}`);
-  
+
   if (!result.success) {
     throw new Error(`Switch failed: ${result.stderr || result.stdout}`);
   }
-  
+
   logSuccess(`Switched ${appName} to ${color}`);
   return result;
 }
 
 export async function dockswapStatus(appName, dockswapBin = "./dockswap") {
   const result = await run(`${dockswapBin} status ${appName}`, { silent: true });
-  
+
   if (!result.success) {
     throw new Error(`Status check failed: ${result.stderr || result.stdout}`);
   }
-  
+
   // Parse status output
   const lines = result.stdout.split('\n');
   const colorLine = lines.find(line => line.includes('Color:'));
   const imageLine = lines.find(line => line.includes('Image:'));
   const statusLine = lines.find(line => line.includes('Status:'));
   const updatedLine = lines.find(line => line.includes('Updated:'));
-  
+
   return {
     activeColor: colorLine?.split('Color:')[1]?.trim(),
     image: imageLine?.split('Image:')[1]?.trim(),
@@ -246,15 +246,15 @@ export function assertTrue(condition, message) {
 export function assertContainerRunning(containers, appName, color) {
   const expectedName = `${appName}-${color}`;
   const container = containers.find(c => c.name === expectedName);
-  
+
   if (!container) {
     throw new Error(`Container ${expectedName} not found. Running containers: ${containers.map(c => c.name).join(', ')}`);
   }
-  
+
   if (!container.status.includes('Up')) {
     throw new Error(`Container ${expectedName} is not running: ${container.status}`);
   }
-  
+
   logSuccess(`Container ${expectedName} is running`);
 }
 
@@ -271,7 +271,7 @@ export function timeExecution(name) {
 
 export async function waitFor(condition, { timeout = 30000, interval = 1000, message = "condition" } = {}) {
   const start = Date.now();
-  
+
   while (Date.now() - start < timeout) {
     try {
       const result = await condition();
@@ -281,32 +281,32 @@ export async function waitFor(condition, { timeout = 30000, interval = 1000, mes
     } catch (error) {
       // Continue waiting
     }
-    
+
     await new Promise(resolve => setTimeout(resolve, interval));
   }
-  
+
   throw new Error(`Timeout waiting for ${message} after ${timeout}ms`);
 }
 
 // Test setup and teardown
-export async function setupE2EEnvironment({ buildDockswap = true, pullImages = [], cleanup = true } = {}) {
+export async function setupE2EEnvironment({ buildDockswap = false, pullImages = [], cleanup = true } = {}) {
   logInfo("Setting up E2E test environment...");
-  
+
   if (cleanup) {
     await cleanupDockswapContainers();
     await cleanupDockswapDatabase();
   }
-  
-  if (buildDockswap) {
-    logInfo("Building dockswap binary...");
-    await run("make build");
-    logSuccess("Dockswap binary built");
-  }
-  
+
+  // if (buildDockswap) {
+  //   logInfo("Building dockswap binary...");
+  //   await run("make build");
+  //   logSuccess("Dockswap binary built");
+  // }
+
   for (const image of pullImages) {
     await pullDockerImage(image);
   }
-  
+
   logSuccess("E2E environment setup complete");
 }
 
