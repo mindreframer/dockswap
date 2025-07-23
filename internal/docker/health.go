@@ -210,6 +210,11 @@ func (dm *DockerManager) determineOverallHealth(dockerHealth, httpHealth HealthS
 		return HealthStatusHealthy
 	}
 
+	// If HTTP is healthy and Docker is unknown (no health check), consider healthy
+	if httpHealth == HealthStatusHealthy && dockerHealth == HealthStatusUnknown {
+		return HealthStatusHealthy
+	}
+
 	// If we have mixed results or unknown status, consider it as starting
 	return HealthStatusStarting
 }

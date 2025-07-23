@@ -2,6 +2,7 @@ package cli
 
 import (
 	"database/sql"
+	"dockswap/internal/config"
 	"fmt"
 	"strconv"
 	"strings"
@@ -15,13 +16,28 @@ type GlobalFlags struct {
 }
 
 type CLI struct {
-	flags GlobalFlags
-	DB    *sql.DB // Add DB handle for inspection commands
+	flags   GlobalFlags
+	DB      *sql.DB // Add DB handle for inspection commands
+	configs map[string]*config.AppConfig
 }
 
 // New creates a CLI with a DB handle.
 func New(db *sql.DB) *CLI {
-	return &CLI{DB: db}
+	return &CLI{
+		DB:      db,
+		configs: make(map[string]*config.AppConfig),
+	}
+}
+
+// LoadConfigs loads all app configurations from the specified directory
+func (c *CLI) LoadConfigs(configDir string) error {
+	appsDir := configDir + "/apps"
+	configs, err := config.LoadAllConfigs(appsDir)
+	if err != nil {
+		return fmt.Errorf("failed to load app configs: %w", err)
+	}
+	c.configs = configs
+	return nil
 }
 
 func (c *CLI) parseGlobalFlags(args []string) ([]string, error) {

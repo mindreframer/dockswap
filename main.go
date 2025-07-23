@@ -42,6 +42,12 @@ func main() {
 
 	c := cli.New(db)
 
+	// Load app configurations
+	if err := c.LoadConfigs(configDir); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to load configs: %v\n", err)
+		os.Exit(1)
+	}
+
 	if err := c.Run(os.Args[1:]); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)

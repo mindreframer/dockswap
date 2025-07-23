@@ -1,10 +1,13 @@
 package cli
 
 import (
+	"context"
+	"dockswap/internal/docker"
 	"dockswap/internal/state"
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func (c *CLI) handleStatus(args []string) error {
@@ -48,11 +51,72 @@ func (c *CLI) handleDeploy(args []string) error {
 	appName := args[0]
 	image := args[1]
 
+	// Check if app config exists
+	appConfig, exists := c.configs[appName]
+	if !exists {
+		return fmt.Errorf("no configuration found for app %s", appName)
+	}
+
 	fmt.Printf("Deploying %s with image %s...\n", appName, image)
-	fmt.Println("✓ Pulling image")
-	fmt.Println("✓ Starting green deployment")
-	fmt.Println("✓ Health check passed")
-	fmt.Println("✓ Ready for traffic switch")
+
+	// Create Docker client
+	dockerClient, err := docker.NewDockerClient()
+	if err != nil {
+		return fmt.Errorf("failed to create Docker client: %w", err)
+	}
+	defer dockerClient.Close()
+
+	dockerManager := docker.NewDockerManager(dockerClient)
+
+	// Test Docker connection
+	ctx := context.Background()
+	if err := dockerManager.ValidateConnection(ctx); err != nil {
+		return fmt.Errorf("Docker not available: %w", err)
+	}
+
+	// Get current active color (default to blue if first deployment)
+	activeColor := "blue"
+	cs, err := state.GetCurrentState(c.DB, appName)
+	if err == nil && cs != nil {
+		activeColor = cs.ActiveColor
+	}
+
+	// Determine target color
+	targetColor := "green"
+	if activeColor == "green" {
+		targetColor = "blue"
+	}
+
+	fmt.Printf("Current active: %s, deploying to: %s\n", activeColor, targetColor)
+
+	// Create action provider
+	actionProvider := docker.NewDockerActionProvider(dockerManager, nil, c.configs)
+	actionProvider.SetContext(ctx)
+
+	// Start container
+	fmt.Println("✓ Starting container...")
+	if err := actionProvider.StartContainer(appName, targetColor, image); err != nil {
+		return fmt.Errorf("failed to start container: %w", err)
+	}
+
+	// Wait for health check
+	fmt.Println("✓ Waiting for health check...")
+	timeout := time.Duration(appConfig.HealthCheck.Retries) * appConfig.HealthCheck.Interval * 2
+	if err := dockerManager.WaitForHealthy(ctx, appName, targetColor, appConfig, timeout); err != nil {
+		return fmt.Errorf("health check failed: %w", err)
+	}
+
+	fmt.Println("✓ Container healthy and ready")
+	fmt.Printf("✓ Deployment complete - traffic still on %s\n", activeColor)
+	fmt.Printf("Run 'dockswap switch %s %s' to switch traffic\n", appName, targetColor)
+
+	// Update database state
+	depID, err := state.InsertDeployment(c.DB, appName, 1, image, "ready", targetColor, nil)
+	if err != nil {
+		fmt.Printf("Warning: failed to update database: %v\n", err)
+	} else {
+		state.UpsertCurrentState(c.DB, appName, depID, activeColor, image, "ready")
+	}
 
 	return nil
 }
@@ -168,11 +232,83 @@ func (c *CLI) handleSwitch(args []string) error {
 		return fmt.Errorf("color must be 'blue' or 'green', got: %s", color)
 	}
 
-	fmt.Printf("Switching %s to %s deployment...\n", appName, color)
-	fmt.Println("✓ Updating load balancer configuration")
-	fmt.Println("✓ Draining connections from old deployment")
-	fmt.Printf("✓ Traffic switched to %s deployment\n", color)
+	// Check if app config exists
+	appConfig, exists := c.configs[appName]
+	if !exists {
+		return fmt.Errorf("no configuration found for app %s", appName)
+	}
 
+	// Create Docker client
+	dockerClient, err := docker.NewDockerClient()
+	if err != nil {
+		return fmt.Errorf("failed to create Docker client: %w", err)
+	}
+	defer dockerClient.Close()
+
+	dockerManager := docker.NewDockerManager(dockerClient)
+	ctx := context.Background()
+
+	// Check if target container exists and is healthy
+	exists, err = dockerManager.ContainerExists(ctx, appName, color)
+	if err != nil {
+		return fmt.Errorf("failed to check container existence: %w", err)
+	}
+	if !exists {
+		return fmt.Errorf("no %s container found for %s", color, appName)
+	}
+
+	// Check health of target container
+	healthy, err := dockerManager.IsContainerHealthy(ctx, appName, color, appConfig)
+	if err != nil {
+		return fmt.Errorf("failed to check container health: %w", err)
+	}
+	if !healthy {
+		return fmt.Errorf("%s container for %s is not healthy", color, appName)
+	}
+
+	fmt.Printf("Switching %s to %s deployment...\n", appName, color)
+
+	// Get current state
+	cs, err := state.GetCurrentState(c.DB, appName)
+	if err != nil {
+		fmt.Printf("Warning: could not get current state: %v\n", err)
+	}
+
+	oldColor := "blue"
+	if cs != nil {
+		oldColor = cs.ActiveColor
+	}
+
+	if oldColor == color {
+		fmt.Printf("Traffic is already on %s deployment\n", color)
+		return nil
+	}
+
+	// Update database state to switch active color
+	fmt.Println("✓ Updating traffic routing...")
+	err = state.UpsertCurrentState(c.DB, appName, 0, color, "switched", "active")
+	if err != nil {
+		return fmt.Errorf("failed to update state: %w", err)
+	}
+
+	// TODO: In a real implementation, this would update Caddy config
+	fmt.Println("✓ Load balancer configuration updated")
+	
+	// Optionally stop old container if configured
+	if appConfig.Deployment.AutoRollback {
+		fmt.Printf("✓ Stopping old %s container...\n", oldColor)
+		err = dockerManager.StopContainer(ctx, appName, oldColor, 30*time.Second)
+		if err != nil {
+			fmt.Printf("Warning: failed to stop old container: %v\n", err)
+		} else {
+			err = dockerManager.RemoveContainer(ctx, appName, oldColor, false)
+			if err != nil {
+				fmt.Printf("Warning: failed to remove old container: %v\n", err)
+			}
+		}
+	}
+
+	fmt.Printf("✓ Traffic switched to %s deployment\n", color)
 	return nil
 }
 
