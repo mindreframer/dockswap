@@ -1,7 +1,6 @@
 #!/usr/bin/env bun
 
 import { describe, test, beforeEach, afterEach, expect } from "bun:test";
-import { $ } from "bun";
 
 // Import utilities
 import {
@@ -18,9 +17,6 @@ const DOCKSWAP_BIN = "./dockswap";
 
 describe("Dockswap E2E - Basic Flow", () => {
     let testStartTime;
-    let deployedColor;
-    let activeColor;
-    let targetColor;
 
     beforeEach(async () => {
         testStartTime = Date.now();
@@ -40,134 +36,96 @@ describe("Dockswap E2E - Basic Flow", () => {
         await teardownE2EEnvironment();
     });
 
-    test("should perform basic deployment flow", async () => {
-        logStep("Testing basic deployment flow");
+    test("should perform complete blue-green deployment workflow", async () => {
+        logStep("Testing complete blue-green deployment workflow");
 
-        // Deploy to first color (should be green since no current state)
+        // 1. Initial deployment
         log(`Deploying ${TEST_APP} with ${TEST_IMAGE}...`);
         const deployResult = await run(`${DOCKSWAP_BIN} deploy ${TEST_APP} ${TEST_IMAGE}`);
-
         expect(deployResult.success).toBe(true);
         logSuccess("Initial deployment completed");
 
-        // Check that container is running
+        // 2. Verify container is running
         log("Verifying container is running...");
         const containerCheck = await run(
             `docker ps --filter "label=dockswap.managed=true" --format "{{.Names}}\t{{.Status}}"`,
             { silent: true }
         );
-
         const runningContainers = containerCheck.stdout.trim().split('\n').filter(line => line.trim());
         expect(runningContainers.length).toBeGreaterThan(0);
 
         const containerName = runningContainers[0].split('\t')[0];
-        deployedColor = containerName.includes('blue') ? 'blue' : 'green';
+        const deployedColor = containerName.includes('blue') ? 'blue' : 'green';
         const port = deployedColor === 'blue' ? BLUE_PORT : GREEN_PORT;
-
         logSuccess(`Container running: ${runningContainers[0]}`);
 
-        // Test HTTP endpoint
+        // 3. Test HTTP endpoint
         log(`Testing HTTP endpoint on port ${port}...`);
         const endpointResult = await checkEndpoint(`http://localhost:${port}`);
         expect(endpointResult.success).toBe(true);
         logSuccess(`HTTP endpoint responding correctly (${endpointResult.status})`);
-    });
 
-    test("should report deployment status correctly", async () => {
-        logStep("Testing status command");
-
-        // First deploy to ensure we have a container
-        await run(`${DOCKSWAP_BIN} deploy ${TEST_APP} ${TEST_IMAGE}`);
-
+        // 4. Test status reporting
         log("Checking deployment status...");
         const statusResult = await run(`${DOCKSWAP_BIN} status ${TEST_APP}`);
         expect(statusResult.success).toBe(true);
 
-        // Parse status output
         const statusLines = statusResult.stdout.split('\n');
         const colorLine = statusLines.find(line => line.includes('Color:'));
         const statusLine = statusLines.find(line => line.includes('Status:'));
-
         expect(colorLine).toBeDefined();
         expect(statusLine).toBeDefined();
 
-        activeColor = colorLine.split('Color:')[1].trim();
+        const activeColor = colorLine.split('Color:')[1].trim();
         const deploymentStatus = statusLine.split('Status:')[1].trim();
-
         expect(activeColor).toMatch(/^(blue|green)$/);
         expect(deploymentStatus).toBeDefined();
-
         logSuccess(`Status check passed - Active: ${activeColor}, Status: ${deploymentStatus}`);
-    });
 
-    test("should perform blue-green deployment", async () => {
-        logStep("Testing blue-green deployment");
-
-        // First deploy to get initial state
-        await run(`${DOCKSWAP_BIN} deploy ${TEST_APP} ${TEST_IMAGE}`);
-        const initialStatus = await run(`${DOCKSWAP_BIN} status ${TEST_APP}`, { silent: true });
-        const initialColorLine = initialStatus.stdout.split('\n').find(line => line.includes('Color:'));
-        const currentColor = initialColorLine.split('Color:')[1].trim();
-
-        targetColor = currentColor === 'blue' ? 'green' : 'blue';
+        // 5. Deploy to second color (blue-green deployment)
+        const targetColor = activeColor === 'blue' ? 'green' : 'blue';
         const targetPort = targetColor === 'blue' ? BLUE_PORT : GREEN_PORT;
 
-        log(`Deploying to ${targetColor} (current active: ${currentColor})...`);
-        const deployResult = await run(`${DOCKSWAP_BIN} deploy ${TEST_APP} ${TEST_IMAGE}`);
-        expect(deployResult.success).toBe(true);
+        log(`Deploying to ${targetColor} (current active: ${activeColor})...`);
+        const secondDeployResult = await run(`${DOCKSWAP_BIN} deploy ${TEST_APP} ${TEST_IMAGE}`);
+        expect(secondDeployResult.success).toBe(true);
         logSuccess(`Deployment to ${targetColor} completed`);
 
-        // Verify both containers are running
+        // 6. Verify both containers are running
         log("Verifying both containers are running...");
-        const containerCheck = await run(
+        const secondContainerCheck = await run(
             `docker ps --filter "label=dockswap.managed=true" --format "{{.Names}}\t{{.Status}}"`,
             { silent: true }
         );
+        const secondRunningContainers = secondContainerCheck.stdout.trim().split('\n').filter(line => line.trim());
+        expect(secondRunningContainers.length).toBe(2);
+        logSuccess(`Both containers running: ${secondRunningContainers.map(c => c.split('\t')[0]).join(', ')}`);
 
-        const runningContainers = containerCheck.stdout.trim().split('\n').filter(line => line.trim());
-        expect(runningContainers.length).toBe(2);
-        logSuccess(`Both containers running: ${runningContainers.map(c => c.split('\t')[0]).join(', ')}`);
-
-        // Test both endpoints
+        // 7. Test both endpoints
         log("Testing both HTTP endpoints...");
         const blueResult = await checkEndpoint(`http://localhost:${BLUE_PORT}`);
         const greenResult = await checkEndpoint(`http://localhost:${GREEN_PORT}`);
-
         expect(blueResult.success).toBe(true);
         expect(greenResult.success).toBe(true);
         logSuccess(`Both endpoints responding - Blue: ${blueResult.status}, Green: ${greenResult.status}`);
-    });
 
-    test("should switch traffic between colors", async () => {
-        logStep("Testing traffic switching");
-
-        // Setup: deploy to both colors
-        await run(`${DOCKSWAP_BIN} deploy ${TEST_APP} ${TEST_IMAGE}`);
-        await run(`${DOCKSWAP_BIN} deploy ${TEST_APP} ${TEST_IMAGE}`);
-
-        // Get current status
-        const statusResult = await run(`${DOCKSWAP_BIN} status ${TEST_APP}`, { silent: true });
-        const colorLine = statusResult.stdout.split('\n').find(line => line.includes('Color:'));
-        const currentActiveColor = colorLine.split('Color:')[1].trim();
-        const switchToColor = currentActiveColor === 'blue' ? 'green' : 'blue';
-
-        log(`Switching traffic to ${switchToColor}...`);
-        const switchResult = await run(`${DOCKSWAP_BIN} switch ${TEST_APP} ${switchToColor}`);
+        // 8. Test traffic switching
+        log(`Switching traffic to ${targetColor}...`);
+        const switchResult = await run(`${DOCKSWAP_BIN} switch ${TEST_APP} ${targetColor}`);
         expect(switchResult.success).toBe(true);
-        logSuccess(`Traffic switched to ${switchToColor}`);
+        logSuccess(`Traffic switched to ${targetColor}`);
 
-        // Verify status shows new active color
+        // 9. Verify status shows new active color
         log("Verifying status update...");
         const newStatusResult = await run(`${DOCKSWAP_BIN} status ${TEST_APP}`, { silent: true });
         expect(newStatusResult.success).toBe(true);
 
         const newColorLine = newStatusResult.stdout.split('\n').find(line => line.includes('Color:'));
         const newActiveColor = newColorLine.split('Color:')[1].trim();
-
-        expect(newActiveColor).toBe(switchToColor);
+        expect(newActiveColor).toBe(targetColor);
         logSuccess(`Status correctly shows active color: ${newActiveColor}`);
 
-        // Final verification
+        // 10. Final verification
         log("Performing final verification...");
         const finalPort = newActiveColor === 'blue' ? BLUE_PORT : GREEN_PORT;
         const finalEndpointCheck = await checkEndpoint(`http://localhost:${finalPort}`);

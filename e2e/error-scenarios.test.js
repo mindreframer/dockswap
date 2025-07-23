@@ -34,66 +34,67 @@ describe("Dockswap E2E - Error Scenarios", () => {
         await teardownE2EEnvironment();
     });
 
-    test("should reject invalid app configuration", async () => {
-        logStep("Testing invalid app configuration");
-        logInfo("Attempting to deploy app with no configuration...");
+    test("should handle all deployment-related errors", async () => {
+        logStep("Testing deployment-related error scenarios");
 
+        // 1. Test invalid app configuration
+        logInfo("Attempting to deploy app with no configuration...");
         const invalidAppResult = await run(
             `./dockswap deploy ${INVALID_APP} ${VALID_IMAGE}`,
             { allowFailure: true, silent: true }
         );
-
         expect(invalidAppResult.success).toBe(false);
         expect(
             invalidAppResult.stderr.includes("no configuration found") ||
             invalidAppResult.stdout.includes("no configuration found")
         ).toBe(true);
         logSuccess("Invalid app configuration properly rejected");
+
+        // 2. Test deployment with invalid image
+        logInfo("Attempting to deploy with non-existent image...");
+        const invalidImageResult = await run(
+            `./dockswap deploy ${TEST_APP} nonexistent-image:latest`,
+            { allowFailure: true, silent: true }
+        );
+        expect(invalidImageResult.success).toBe(false);
+        logSuccess("Invalid image properly rejected");
+
+        // 3. Test malformed command arguments
+        logInfo("Attempting to run deploy without required arguments...");
+        const malformedResult = await run(
+            `./dockswap deploy`,
+            { allowFailure: true, silent: true }
+        );
+        expect(malformedResult.success).toBe(false);
+        logSuccess("Malformed command properly rejected");
     });
 
-    test("should reject traffic switch without deployment", async () => {
-        logStep("Testing traffic switch without deployment");
-        logInfo("Attempting to switch traffic with no containers...");
+    test("should handle all traffic switching errors", async () => {
+        logStep("Testing traffic switching error scenarios");
 
+        // 1. Test traffic switch without deployment
+        logInfo("Attempting to switch traffic with no containers...");
         const switchResult = await run(
             `./dockswap switch ${TEST_APP} blue`,
             { allowFailure: true, silent: true }
         );
-
         expect(switchResult.success).toBe(false);
         logSuccess("Switch without deployment properly rejected");
-    });
 
-    test("should handle valid deployment correctly", async () => {
-        logStep("Testing valid deployment for comparison");
-
-        await dockswapDeploy(TEST_APP, VALID_IMAGE);
-
-        const status = await dockswapStatus(TEST_APP);
-        expect(status.activeColor).toBeDefined();
-        logSuccess("Valid deployment works as expected");
-    });
-
-    test("should reject invalid color in switch command", async () => {
-        logStep("Testing switch to invalid color");
+        // 2. Test switch to invalid color
         logInfo("Attempting to switch to invalid color...");
-
         const invalidColorResult = await run(
             `./dockswap switch ${TEST_APP} purple`,
             { allowFailure: true, silent: true }
         );
-
         expect(invalidColorResult.success).toBe(false);
         expect(
             invalidColorResult.stderr.includes("must be 'blue' or 'green'") ||
             invalidColorResult.stdout.includes("must be 'blue' or 'green'")
         ).toBe(true);
         logSuccess("Invalid color properly rejected");
-    });
 
-    test("should reject switch to non-existent container", async () => {
-        logStep("Testing switch to non-existent container");
-
+        // 3. Test switch to non-existent container
         // First deploy to one color
         await dockswapDeploy(TEST_APP, VALID_IMAGE);
         const currentStatus = await dockswapStatus(TEST_APP);
@@ -104,7 +105,6 @@ describe("Dockswap E2E - Error Scenarios", () => {
             `./dockswap switch ${TEST_APP} ${otherColor}`,
             { allowFailure: true, silent: true }
         );
-
         expect(noContainerResult.success).toBe(false);
 
         // Log actual error for debugging
@@ -114,44 +114,23 @@ describe("Dockswap E2E - Error Scenarios", () => {
         logSuccess("Switch to non-existent container properly rejected");
     });
 
-    test("should handle status for non-existent app", async () => {
-        logStep("Testing status for non-existent app");
-        logInfo("Checking status for non-existent app...");
+    test("should handle status and validation scenarios", async () => {
+        logStep("Testing status and validation scenarios");
 
+        // 1. Test status for non-existent app
+        logInfo("Checking status for non-existent app...");
         const result = await run(
             `./dockswap status nonexistent-app`,
             { allowFailure: true, silent: true }
         );
-
         // This might succeed with empty results or fail - both are acceptable
-        // We just want to ensure it doesn't crash
         expect(result).toBeDefined();
         logSuccess("Status for non-existent app handled appropriately");
-    });
 
-    test("should handle deployment with invalid image", async () => {
-        logStep("Testing deployment with invalid image");
-        logInfo("Attempting to deploy with non-existent image...");
-
-        const invalidImageResult = await run(
-            `./dockswap deploy ${TEST_APP} nonexistent-image:latest`,
-            { allowFailure: true, silent: true }
-        );
-
-        expect(invalidImageResult.success).toBe(false);
-        logSuccess("Invalid image properly rejected");
-    });
-
-    test("should handle malformed command arguments", async () => {
-        logStep("Testing malformed command arguments");
-        logInfo("Attempting to run deploy without required arguments...");
-
-        const malformedResult = await run(
-            `./dockswap deploy`,
-            { allowFailure: true, silent: true }
-        );
-
-        expect(malformedResult.success).toBe(false);
-        logSuccess("Malformed command properly rejected");
+        // 2. Test valid deployment for comparison
+        await dockswapDeploy(TEST_APP, VALID_IMAGE);
+        const status = await dockswapStatus(TEST_APP);
+        expect(status.activeColor).toBeDefined();
+        logSuccess("Valid deployment works as expected");
     });
 }); 
