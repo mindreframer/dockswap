@@ -1,6 +1,8 @@
 package deployment
 
 import (
+	"database/sql"
+	"dockswap/internal/state"
 	"fmt"
 	"time"
 )
@@ -58,6 +60,10 @@ type DeploymentStateMachine struct {
 	drainTimeout       time.Duration
 
 	stateHistory []StateTransition
+
+	db *sql.DB // NEW: DB handle for persistence
+
+	deploymentID int64 // NEW: Track current deployment row
 }
 
 type StateTransition struct {
@@ -68,7 +74,8 @@ type StateTransition struct {
 	Error     error
 }
 
-func New(appName, activeColor string, actions ActionProvider) *DeploymentStateMachine {
+// New creates a new state machine with DB persistence.
+func New(appName, activeColor string, actions ActionProvider, db *sql.DB) *DeploymentStateMachine {
 	return &DeploymentStateMachine{
 		state:              StateStable,
 		appName:            appName,
@@ -77,6 +84,7 @@ func New(appName, activeColor string, actions ActionProvider) *DeploymentStateMa
 		healthCheckTimeout: 60 * time.Second,
 		drainTimeout:       30 * time.Second,
 		stateHistory:       make([]StateTransition, 0),
+		db:                 db,
 	}
 }
 
@@ -133,6 +141,22 @@ func (sm *DeploymentStateMachine) Deploy(newImage string) error {
 	sm.newImage = newImage
 	sm.targetColor = sm.getInactiveColor()
 	sm.previousColor = sm.activeColor
+
+	// --- DB: Insert config if new, then deployment ---
+	cfg, err := state.GetLatestAppConfig(sm.db, sm.appName)
+	if err != nil || cfg == nil || cfg.ConfigYAML != newImage {
+		// For now, treat newImage as config YAML (stub)
+		_, err := state.InsertAppConfig(sm.db, sm.appName, newImage, "sha-stub")
+		if err != nil {
+			return fmt.Errorf("failed to insert app config: %w", err)
+		}
+	}
+	cfg, _ = state.GetLatestAppConfig(sm.db, sm.appName)
+	depID, err := state.InsertDeployment(sm.db, sm.appName, cfg.ID, newImage, "deploying", sm.targetColor, nil)
+	if err != nil {
+		return fmt.Errorf("failed to insert deployment: %w", err)
+	}
+	sm.deploymentID = depID
 
 	return sm.ProcessEvent(EventDeploy)
 }
@@ -320,6 +344,16 @@ func (sm *DeploymentStateMachine) recordTransition(fromState, toState Deployment
 		Error:     err,
 	}
 	sm.stateHistory = append(sm.stateHistory, transition)
+
+	// --- DB: Persist event and update current state ---
+	if sm.db != nil && sm.deploymentID != 0 {
+		errMsg := ""
+		if err != nil {
+			errMsg = err.Error()
+		}
+		_, _ = state.InsertDeploymentEvent(sm.db, sm.deploymentID, sm.appName, string(event), "{}", &errMsg)
+		_ = state.UpsertCurrentState(sm.db, sm.appName, sm.deploymentID, sm.activeColor, sm.newImage, string(toState))
+	}
 }
 
 func (sm *DeploymentStateMachine) GetActiveColor() string {
