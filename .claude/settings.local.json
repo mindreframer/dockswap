@@ -21,7 +21,8 @@
       "Bash(curl:*)",
       "Bash(docker logs:*)",
       "Bash(bun run:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(bun:*)"
     ],
     "deny": []
   }
