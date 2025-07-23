@@ -1,12 +1,11 @@
 #!/usr/bin/env bun
 
 import { describe, test, beforeEach, afterEach, expect } from "bun:test";
-import { $ } from "bun";
 
 // Import utilities
 import {
-    log, logStep, logSuccess, logError, logInfo, run, setupE2EEnvironment, teardownE2EEnvironment,
-    colors, resetStepCounter, dockswapDeploy, dockswapStatus, assertTrue
+    log, logStep, logSuccess, logInfo, run, setupE2EEnvironment, teardownE2EEnvironment,
+    colors, resetStepCounter, dockswapDeploy, dockswapStatus
 } from './utils.js';
 
 // Test configuration
@@ -23,7 +22,6 @@ describe("Dockswap E2E - Error Scenarios", () => {
 
         log(`${colors.bold}${colors.blue}🧪 Setting up error scenario test environment${colors.reset}`);
         await setupE2EEnvironment({
-            buildDockswap: true,
             pullImages: [VALID_IMAGE],
             cleanup: true
         });

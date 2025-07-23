@@ -297,6 +297,7 @@ export async function setupE2EEnvironment({ buildDockswap = false, pullImages = 
     await cleanupDockswapDatabase();
   }
 
+  // We build the binary once in the makefile before running tests
   // if (buildDockswap) {
   //   logInfo("Building dockswap binary...");
   //   await run("make build");

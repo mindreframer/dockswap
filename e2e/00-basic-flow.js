@@ -18,7 +18,6 @@ async function setup() {
   logStep("Setting up test environment");
 
   await setupE2EEnvironment({
-    buildDockswap: true,
     pullImages: [TEST_IMAGE],
     cleanup: true
   });

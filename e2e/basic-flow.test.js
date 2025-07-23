@@ -28,7 +28,6 @@ describe("Dockswap E2E - Basic Flow", () => {
 
         log(`${colors.bold}${colors.blue}🚀 Setting up test environment${colors.reset}`);
         await setupE2EEnvironment({
-            buildDockswap: true,
             pullImages: [TEST_IMAGE],
             cleanup: true
         });
