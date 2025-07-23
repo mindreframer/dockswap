@@ -16,6 +16,7 @@ vendor/
 
 # Go workspace file
 go.work
+coverage.html
 
 # IDE files
 .vscode/
