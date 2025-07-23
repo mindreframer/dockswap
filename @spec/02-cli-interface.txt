@@ -1,0 +1,16 @@
+## CLI API: 
+
+dockswap (prints help)
+dockswap status [app-name]
+dockswap deploy <app-name> <image>
+dockswap history <app-name> [--limit 10]
+dockswap health <app-name>
+dockswap switch <app-name> <color>
+dockswap logs <app-name> [--follow]
+dockswap config reload [app-name]
+dockswap version 
+
+
+Global flags: 
+    --config <path>
+    --log-level <level> (1/2/3) 

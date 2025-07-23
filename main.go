@@ -1,7 +1,16 @@
 package main
 
-import "fmt"
+import (
+	"dockswap/internal/cli"
+	"fmt"
+	"os"
+)
 
 func main() {
-	fmt.Println("Welcome to dockswap!")
+	c := cli.New()
+	
+	if err := c.Run(os.Args[1:]); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
 }

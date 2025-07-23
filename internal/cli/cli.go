@@ -1,0 +1,128 @@
+package cli
+
+import (
+	"fmt"
+	"strconv"
+	"strings"
+)
+
+const Version = "0.1.0"
+
+type GlobalFlags struct {
+	Config   string
+	LogLevel int
+}
+
+type CLI struct {
+	flags GlobalFlags
+}
+
+func New() *CLI {
+	return &CLI{}
+}
+
+func (c *CLI) parseGlobalFlags(args []string) ([]string, error) {
+	var filteredArgs []string
+	
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		
+		if strings.HasPrefix(arg, "--config=") {
+			c.flags.Config = strings.TrimPrefix(arg, "--config=")
+		} else if arg == "--config" && i+1 < len(args) {
+			i++
+			c.flags.Config = args[i]
+		} else if strings.HasPrefix(arg, "--log-level=") {
+			levelStr := strings.TrimPrefix(arg, "--log-level=")
+			level, err := strconv.Atoi(levelStr)
+			if err != nil || level < 1 || level > 3 {
+				return nil, fmt.Errorf("invalid log level: %s (must be 1, 2, or 3)", levelStr)
+			}
+			c.flags.LogLevel = level
+		} else if arg == "--log-level" && i+1 < len(args) {
+			i++
+			level, err := strconv.Atoi(args[i])
+			if err != nil || level < 1 || level > 3 {
+				return nil, fmt.Errorf("invalid log level: %s (must be 1, 2, or 3)", args[i])
+			}
+			c.flags.LogLevel = level
+		} else {
+			filteredArgs = append(filteredArgs, arg)
+		}
+	}
+	
+	return filteredArgs, nil
+}
+
+func (c *CLI) Run(args []string) error {
+	if len(args) == 0 {
+		c.printHelp()
+		return nil
+	}
+	
+	filteredArgs, err := c.parseGlobalFlags(args)
+	if err != nil {
+		return err
+	}
+	
+	if len(filteredArgs) == 0 {
+		c.printHelp()
+		return nil
+	}
+	
+	command := filteredArgs[0]
+	commandArgs := filteredArgs[1:]
+	
+	switch command {
+	case "status":
+		return c.handleStatus(commandArgs)
+	case "deploy":
+		return c.handleDeploy(commandArgs)
+	case "history":
+		return c.handleHistory(commandArgs)
+	case "health":
+		return c.handleHealth(commandArgs)
+	case "switch":
+		return c.handleSwitch(commandArgs)
+	case "logs":
+		return c.handleLogs(commandArgs)
+	case "config":
+		return c.handleConfig(commandArgs)
+	case "version":
+		return c.handleVersion(commandArgs)
+	case "help", "-h", "--help":
+		c.printHelp()
+		return nil
+	default:
+		return fmt.Errorf("unknown command: %s", command)
+	}
+}
+
+func (c *CLI) printHelp() {
+	fmt.Print(`dockswap - Docker container blue-green deployment tool
+
+Usage:
+  dockswap <command> [arguments] [flags]
+
+Commands:
+  status [app-name]               Show deployment status for all apps or specific app
+  deploy <app-name> <image>       Deploy new image for application
+  history <app-name> [--limit N]  Show deployment history for application
+  health <app-name>               Check health status of application
+  switch <app-name> <color>       Switch traffic to blue or green deployment
+  logs <app-name> [--follow]      Show logs for application
+  config reload [app-name]        Reload configuration for all apps or specific app
+  version                         Show version information
+  help                           Show this help message
+
+Global Flags:
+  --config <path>                Configuration file path
+  --log-level <level>            Log level (1=error, 2=info, 3=debug)
+
+Examples:
+  dockswap status                 # Show all app statuses
+  dockswap deploy myapp nginx:1.21
+  dockswap switch myapp blue
+  dockswap logs myapp --follow
+`)
+}
