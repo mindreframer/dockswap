@@ -1,0 +1,86 @@
+  Key Docker Integration Questions:
+
+  1. Container Management Strategy:
+  - How should we name containers? (e.g., myapp-blue, myapp-green?)
+  - Should we keep both blue and green containers running, or start/stop them during deployments?
+  - When do we clean up old containers?
+
+  2. Image Management:
+  - Should we pull images before deployment starts, or on-demand?
+  - How do we handle image pull failures or slow pulls?
+  - Do we need image cleanup/garbage collection?
+
+  3. Docker API Approach:
+  - Use Docker CLI commands via exec, or Docker API directly (via Go client)?
+  - How do we handle Docker daemon connectivity issues?
+
+  4. Health Check Integration:
+  - Use Docker's built-in health checks, or dockswap's own HTTP health checks?
+  - How long to wait for containers to become healthy?
+  - What happens if health checks fail during deployment?
+
+  5. Blue-Green Container Lifecycle:
+  - Scenario A: Keep both containers running, switch Caddy routing
+  - Scenario B: Start new container, health check, switch traffic, stop old container
+  - Scenario C: Always run both, just update the inactive one
+
+  6. Resource and Network Management:
+  - Should dockswap create Docker networks, or use existing ones?
+  - How to handle port conflicts between blue/green containers?
+  - How to apply CPU/memory limits from config?
+
+  7. Data Persistence:
+  - How to handle volumes during blue-green switches?
+  - Should volumes be shared between blue/green, or separate?
+
+  8. Rollback Strategy:
+  - Keep previous containers around for quick rollback?
+  - Or restart previous image if rollback needed?
+
+  9. Container Startup Coordination:
+  - Wait for container health before updating Caddy config?
+  - Handle startup dependencies between containers?
+
+  What's your preferred approach for these aspects? I'm thinking we should start with a simple but robust strategy and can elaborate
+  from there.
+
+
+
+  Answers: 
+
+1. 
+- yes, appname-blue / green is fine
+- no, after promoting active container, the old one should be stopped
+- there will be a separate task for cleanup 
+
+2. 
+- assume the image is already there. 
+- no cleanup 
+
+3. 
+- docker api (go client)
+- on connectivity issues exit with an error message
+
+4. 
+- i guess both? they are valueable for different purposes
+- this will be handled by a state machine, that can be unit-tested in isolation
+
+5. 
+- B. stop old container after promotion
+
+
+6. 
+- dockswap should create needed networks (if configured in the app config)
+- there will be validation during config loading for port conflicts, ignore for now
+- through the docker REST API 
+
+7. 
+- good questions, I guess they should be shared
+
+8. 
+
+- yes, there will be a number of old containers (like last 5). not part of this task
+-
+
+9. 
+- yes, wait for the health checks before updating caddy config. 

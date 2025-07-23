@@ -30,3 +30,37 @@ Caddy Integration Questions
   - How should dockswap handle Caddy crashes or restarts?
 
   What's your preferred approach for these aspects?
+
+
+1. 
+    - one for all apps
+    - assume it is already running (simpler)
+
+
+2. 
+    - generate configs dynamically
+    - dockswap-cfg/caddy/config.json looks nice. we will use dockswap-cfg/caddy/template.json for generation. 
+
+3. 
+    - update config + reload. Should be ok for start
+    - instant
+
+
+4. 
+    - can be handled by tempating. If template does not include healthchecks, they wont be generated
+    - failed checks -> no swap 
+
+5. 
+    - 1 caddy for all
+    - validation happens on config load, we will check for port collision on that layer, no concern for caddy component
+
+6.  
+    - json config (friendlier for programmatic generation)
+    - not right now
+
+7. 
+    - external management
+    - if caddy is not running, log error and halt
+
+    
+
