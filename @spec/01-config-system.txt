@@ -1,0 +1,85 @@
+File structure in the config folder: 
+
+```bash
+/etc/dockswap/
+├── dockswap.sqlite3
+├── caddy-template.json
+├── caddy.json (generated)
+├── apps/*.yaml (static config)
+└── state/*.yaml (runtime state)
+```
+
+
+App config sample
+
+```yml
+# /etc/dockswap/apps/web-api.yaml
+
+name: web-api
+description: "Main web API service"
+
+# Docker configuration
+docker:
+  restart_policy: "unless-stopped"
+  pull_policy: "always"
+  
+  # Resource limits
+  memory_limit: "512m"
+  cpu_limit: "0.5"
+  
+  # Environment variables
+  environment:
+    DATABASE_URL: "postgres://localhost/webapi"
+    LOG_LEVEL: "info"
+    PORT: "8080"
+  
+  # Volume mounts
+  volumes:
+    - "/var/log/app:/app/logs"
+    - "/etc/ssl/certs:/etc/ssl/certs:ro"
+  
+  # Container port
+  expose_port: 8080
+  network: "dockswap"
+
+# Port allocation for blue-green
+ports:
+  blue: 8081
+  green: 8082
+
+# Health check configuration
+health_check:
+  endpoint: "/health"
+  method: "GET"
+  timeout: "5s"
+  interval: "2s"
+  retries: 3
+  success_threshold: 2
+  expected_status: 200
+
+# Deployment behavior
+deployment:
+  startup_delay: "10s"
+  drain_timeout: "30s"
+  stop_timeout: "15s"
+  auto_rollback: true
+
+# Caddy proxy configuration
+proxy:
+  listen_port: 80
+  host: "api.example.com"
+  path_prefix: "/"
+```
+
+
+Runtime state for an app: 
+```yaml
+# /etc/dockswap/state/web-api.yaml
+name: "web-api"
+current_image: "myapp:v1.2.4"
+desired_image: "myapp:v1.2.4"
+active_color: "blue"
+status: "stable"
+last_deployment: "2025-07-23T10:30:00Z"
+last_updated: "2025-07-23T10:35:00Z"
+```
