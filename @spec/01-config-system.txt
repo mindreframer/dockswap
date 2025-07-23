@@ -3,8 +3,8 @@ File structure in the config folder:
 ```bash
 /etc/dockswap/
 ├── dockswap.sqlite3
-├── caddy-template.json
-├── caddy.json (generated)
+├── caddy/template.json
+├── caddy/config.json (generated)
 ├── apps/*.yaml (static config)
 └── state/*.yaml (runtime state)
 ```
