@@ -108,7 +108,7 @@ func (m *MockActionProvider) RollbackCaddy(appName, activeColor string) error {
 
 func TestNew(t *testing.T) {
 	actions := &MockActionProvider{}
-	sm := New("test-app", "blue", actions)
+	sm := New("test-app", "blue", actions, nil)
 
 	if sm.GetState() != StateStable {
 		t.Errorf("New() initial state = %v, want %v", sm.GetState(), StateStable)
@@ -123,7 +123,7 @@ func TestNew(t *testing.T) {
 
 func TestSuccessfulDeployment(t *testing.T) {
 	actions := &MockActionProvider{}
-	sm := New("test-app", "blue", actions)
+	sm := New("test-app", "blue", actions, nil)
 
 	// Start deployment
 	err := sm.Deploy("nginx:1.22")
@@ -207,7 +207,7 @@ func TestContainerStartFailure(t *testing.T) {
 	actions := &MockActionProvider{
 		startContainerError: fmt.Errorf("container start failed"),
 	}
-	sm := New("test-app", "blue", actions)
+	sm := New("test-app", "blue", actions, nil)
 
 	// Start deployment
 	err := sm.Deploy("nginx:1.22")
@@ -230,7 +230,7 @@ func TestContainerStartFailure(t *testing.T) {
 
 func TestHealthCheckFailureRollback(t *testing.T) {
 	actions := &MockActionProvider{}
-	sm := New("test-app", "blue", actions)
+	sm := New("test-app", "blue", actions, nil)
 
 	// Get to health check state
 	sm.Deploy("nginx:1.22")
@@ -270,7 +270,7 @@ func TestCaddyUpdateFailureRollback(t *testing.T) {
 	actions := &MockActionProvider{
 		updateCaddyError: fmt.Errorf("caddy update failed"),
 	}
-	sm := New("test-app", "blue", actions)
+	sm := New("test-app", "blue", actions, nil)
 
 	// Get to switching state
 	sm.Deploy("nginx:1.22")
@@ -289,7 +289,7 @@ func TestCaddyUpdateFailureRollback(t *testing.T) {
 
 func TestInvalidStateTransitions(t *testing.T) {
 	actions := &MockActionProvider{}
-	sm := New("test-app", "blue", actions)
+	sm := New("test-app", "blue", actions, nil)
 
 	tests := []struct {
 		name         string
@@ -318,7 +318,7 @@ func TestInvalidStateTransitions(t *testing.T) {
 
 func TestStateHistory(t *testing.T) {
 	actions := &MockActionProvider{}
-	sm := New("test-app", "blue", actions)
+	sm := New("test-app", "blue", actions, nil)
 
 	// Perform some state transitions
 	sm.Deploy("nginx:1.22")
@@ -347,7 +347,7 @@ func TestStateHistory(t *testing.T) {
 
 func TestManualRecovery(t *testing.T) {
 	actions := &MockActionProvider{}
-	sm := New("test-app", "blue", actions)
+	sm := New("test-app", "blue", actions, nil)
 
 	// Force into failed state
 	sm.state = StateFailed
@@ -363,7 +363,7 @@ func TestManualRecovery(t *testing.T) {
 
 func TestTimeoutConfiguration(t *testing.T) {
 	actions := &MockActionProvider{}
-	sm := New("test-app", "blue", actions)
+	sm := New("test-app", "blue", actions, nil)
 
 	healthTimeout := 120 * time.Second
 	drainTimeout := 45 * time.Second
@@ -381,7 +381,7 @@ func TestTimeoutConfiguration(t *testing.T) {
 
 func TestHelperMethods(t *testing.T) {
 	actions := &MockActionProvider{}
-	sm := New("test-app", "blue", actions)
+	sm := New("test-app", "blue", actions, nil)
 
 	// Test initial state
 	if !sm.CanDeploy() {
@@ -424,12 +424,12 @@ func TestHelperMethods(t *testing.T) {
 func TestGetInactiveColor(t *testing.T) {
 	actions := &MockActionProvider{}
 
-	blueActiveSm := New("test-app", "blue", actions)
+	blueActiveSm := New("test-app", "blue", actions, nil)
 	if blueActiveSm.getInactiveColor() != "green" {
 		t.Errorf("Inactive color for blue active = %v, want green", blueActiveSm.getInactiveColor())
 	}
 
-	greenActiveSm := New("test-app", "green", actions)
+	greenActiveSm := New("test-app", "green", actions, nil)
 	if greenActiveSm.getInactiveColor() != "blue" {
 		t.Errorf("Inactive color for green active = %v, want blue", greenActiveSm.getInactiveColor())
 	}

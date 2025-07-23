@@ -182,7 +182,7 @@ func (do *DeploymentOrchestrator) InitializeApp(appName, activeColor string) err
 	actionProvider := NewDockerActionProvider(do.dockerManager, do.caddyManager, do.configs)
 
 	// Create state machine
-	stateMachine := deployment.New(appName, activeColor, actionProvider)
+	stateMachine := deployment.New(appName, activeColor, actionProvider, nil)
 
 	// Configure timeouts from app config
 	stateMachine.SetHealthCheckTimeout(time.Duration(appConfig.HealthCheck.Retries) * appConfig.HealthCheck.Interval)

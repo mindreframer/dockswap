@@ -143,20 +143,22 @@ func (sm *DeploymentStateMachine) Deploy(newImage string) error {
 	sm.previousColor = sm.activeColor
 
 	// --- DB: Insert config if new, then deployment ---
-	cfg, err := state.GetLatestAppConfig(sm.db, sm.appName)
-	if err != nil || cfg == nil || cfg.ConfigYAML != newImage {
-		// For now, treat newImage as config YAML (stub)
-		_, err := state.InsertAppConfig(sm.db, sm.appName, newImage, "sha-stub")
-		if err != nil {
-			return fmt.Errorf("failed to insert app config: %w", err)
+	if sm.db != nil {
+		cfg, err := state.GetLatestAppConfig(sm.db, sm.appName)
+		if err != nil || cfg == nil || cfg.ConfigYAML != newImage {
+			// For now, treat newImage as config YAML (stub)
+			_, err := state.InsertAppConfig(sm.db, sm.appName, newImage, "sha-stub")
+			if err != nil {
+				return fmt.Errorf("failed to insert app config: %w", err)
+			}
 		}
+		cfg, _ = state.GetLatestAppConfig(sm.db, sm.appName)
+		depID, err := state.InsertDeployment(sm.db, sm.appName, cfg.ID, newImage, "deploying", sm.targetColor, nil)
+		if err != nil {
+			return fmt.Errorf("failed to insert deployment: %w", err)
+		}
+		sm.deploymentID = depID
 	}
-	cfg, _ = state.GetLatestAppConfig(sm.db, sm.appName)
-	depID, err := state.InsertDeployment(sm.db, sm.appName, cfg.ID, newImage, "deploying", sm.targetColor, nil)
-	if err != nil {
-		return fmt.Errorf("failed to insert deployment: %w", err)
-	}
-	sm.deploymentID = depID
 
 	return sm.ProcessEvent(EventDeploy)
 }
