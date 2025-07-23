@@ -22,19 +22,19 @@ bun test e2e/*.test.js --timeout=30000
 #### Run Specific Test Files
 ```bash
 # Basic flow tests
-bun test e2e/basic-flow.test.js --timeout=30000
+bun test e2e/01-basic-flow.test.js --timeout=30000
 
 # Error scenario tests
-bun test e2e/error-scenarios.test.js --timeout=30000
+bun test e2e/02-error-scenarios.test.js --timeout=30000
 ```
 
 #### Run Tests with Pattern Matching
 ```bash
 # Run only basic flow tests
-bun test e2e/basic-flow.test.js
+bun test e2e/01-basic-flow.test.js
 
 # Run only error tests
-bun test e2e/error-scenarios.test.js
+bun test e2e/02-error-scenarios.test.js
 
 # Run tests matching a pattern
 bun test e2e/ --test-name-pattern "deployment"
@@ -55,9 +55,8 @@ bun run e2e/01-error-scenarios.js
 ## Test Structure
 
 ### New Test Framework Files
-- `basic-flow.test.js` - Complete basic deployment workflow using Bun test framework
-- `error-scenarios.test.js` - Error handling and edge cases using Bun test framework
-- `test.config.js` - Test configuration and settings
+- `01-basic-flow.test.js` - Complete basic deployment workflow using Bun test framework
+- `02-error-scenarios.test.js` - Error handling and edge cases using Bun test framework
 
 ### Legacy Files (for reference)
 - `00-basic-flow.js` - Original basic deployment workflow
@@ -66,7 +65,7 @@ bun run e2e/01-error-scenarios.js
 
 ## Test Categories
 
-### Basic Flow Tests (`basic-flow.test.js`)
+### Basic Flow Tests (`01-basic-flow.test.js`)
 Tests the complete blue-green deployment workflow:
 
 - ✅ **should perform complete blue-green deployment workflow** - Comprehensive test covering:
@@ -78,7 +77,7 @@ Tests the complete blue-green deployment workflow:
   - HTTP endpoint validation
   - Final verification
 
-### Error Scenario Tests (`error-scenarios.test.js`)
+### Error Scenario Tests (`02-error-scenarios.test.js`)
 Tests error handling and edge cases:
 
 - ✅ **should handle all deployment-related errors** - Comprehensive deployment error testing:
@@ -128,13 +127,7 @@ Tests use colored console output for better readability:
 - Automatic cleanup of test containers
 - Image pulling and verification
 
-## Test Configuration
 
-The `test.config.js` file contains:
-- Default timeout settings (30 seconds for e2e tests)
-- Test categories and descriptions
-- Environment settings
-- Test app configurations
 
 ## Utilities (utils.js)
 
