@@ -104,7 +104,7 @@ CREATE TABLE active_connections (
 ```yaml
 # /etc/blue-green/apps/{app-name}.yaml
 name: "web-api"
-image: "myapp:latest"  # default/current image
+image: "web-api:20250630-1010-a333666"  # default/current image
 ports:
   proxy: 8000          # external facing port
   blue: 18000          # internal blue container port
