@@ -19,7 +19,9 @@
       "Bash(docker network:*)",
       "Bash(true)",
       "Bash(curl:*)",
-      "Bash(docker logs:*)"
+      "Bash(docker logs:*)",
+      "Bash(bun run:*)",
+      "Bash(rm:*)"
     ],
     "deny": []
   }
