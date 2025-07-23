@@ -2,6 +2,7 @@ package main
 
 import (
 	"dockswap/internal/cli"
+	"dockswap/internal/config"
 	"dockswap/internal/state"
 	"fmt"
 	"os"
@@ -25,6 +26,11 @@ func main() {
 		os.Exit(1)
 	}
 	fmt.Fprintf(os.Stderr, "[info] Using config dir: %s\n", configDir)
+
+	if err := config.ValidateAndPrepareConfigDir(configDir); err != nil {
+		fmt.Fprintf(os.Stderr, "Config validation error: %v\n", err)
+		os.Exit(1)
+	}
 
 	dbPath := configDir + "/dockswap.db"
 	db, err := state.OpenAndMigrate(dbPath)
