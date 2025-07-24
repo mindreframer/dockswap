@@ -1,4 +1,4 @@
-import { run, logStep, logSuccess, logWarning, checkEndpoint } from './utils.js';
+import { run, logStep, logSuccess, logInfo, waitFor, logWarning, checkEndpoint } from './utils.js';
 
 /**
  * Page object for Caddy server control and assertions in E2E tests.
@@ -15,15 +15,10 @@ export class Caddy {
     }
 
     /**
-     * Starts the Caddy server.
+     * Starts the Caddy server with a complete config.
      * @param {string} configPath - Path to the Caddy config file.
+     * @param {number} adminPort - The admin port to listen on.
      */
-    async start(configPath) {
-        logStep("Starting Caddy server");
-        await run(`caddy start --config ${configPath}`, { env: this.env });
-        logSuccess("Caddy started");
-    }
-
     async startComplete(configPath, adminPort = 2019) {
         logInfo(`Starting Caddy with config: ${configPath}`);
 
@@ -96,7 +91,8 @@ export class Caddy {
      */
     async stop() {
         logStep("Stopping Caddy server");
-        await run(`caddy stop`, { env: this.env });
+        // Kill any existing Caddy processes
+        await run("pkill -f caddy || true", { allowFailure: true, silent: true });
         logSuccess("Caddy stopped");
     }
 
