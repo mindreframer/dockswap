@@ -5,12 +5,13 @@ import { describe, test, beforeEach, afterEach, expect } from "bun:test";
 // Import utilities
 import {
     log, logStep, logSuccess, logWarning, logInfo, run, setupE2EEnvironment, teardownE2EEnvironment,
-    colors, resetStepCounter, startCaddy, stopCaddy, createTestAppConfig,
-    validateCaddyIntegration, createTestTempDir, cleanupTestTempDir
+    colors, resetStepCounter, createTestAppConfig,
+    createTestTempDir, cleanupTestTempDir
 } from './utils.js';
 
 import { DockSwap } from './dockswap.page.js';
 import { DockerTest } from './docker.page.js';
+import { Caddy } from './caddy.page.js';
 
 // Test configuration
 const TEST_APP = "caddy-integration-test";
@@ -33,12 +34,17 @@ describe("Dockswap E2E - Complete Caddy Integration", () => {
      */
     let dockSwap;
 
-
     /**
      * Instance of DockerTest class for Docker container assertions and health checks.
      * @type {DockerTest}
      */
     let docker;
+
+    /**
+     * Instance of Caddy page object for controlling and asserting Caddy server in tests.
+     * @type {Caddy}
+     */
+    let caddy;
 
     beforeEach(async () => {
         testStartTime = Date.now();
@@ -50,14 +56,14 @@ describe("Dockswap E2E - Complete Caddy Integration", () => {
         env = { ...process.env, DOCKSWAP_CONFIG_DIR: baseDir };
         await createTestAppConfig(baseDir, TEST_APP, BLUE_PORT, GREEN_PORT, PROXY_PORT);
 
-
-        dockSwap = new DockSwap({ binPath: "./dockswap", env, baseDir })
+        dockSwap = new DockSwap({ binPath: "./dockswap", env, baseDir });
         docker = new DockerTest();
+        caddy = new Caddy({ baseDir, env });
 
         log(`${colors.bold}${colors.blue}🚀 Setting up complete Caddy integration test environment${colors.reset}`);
         await setupE2EEnvironment({ pullImages: [TEST_IMAGE], cleanup: true, baseDir });
         try {
-            await startCaddy(baseDir, CADDY_CONFIG_PATH(baseDir));
+            await caddy.startComplete(CADDY_CONFIG_PATH(baseDir));
             caddyStarted = true;
             logSuccess("Caddy started for testing");
         } catch (error) {
@@ -74,8 +80,8 @@ describe("Dockswap E2E - Complete Caddy Integration", () => {
         log(`${colors.dim}Test completed in ${duration}s${colors.reset}`);
 
         // Stop Caddy if we started it
-        if (caddyStarted) {
-            await stopCaddy();
+        if (caddyStarted && caddy) {
+            await caddy.stop();
         }
 
         await teardownE2EEnvironment(baseDir);
@@ -98,7 +104,7 @@ describe("Dockswap E2E - Complete Caddy Integration", () => {
         logSuccess("Initial deployment completed");
 
         // 1b. Force Caddy config reload after first deploy
-        await dockSwap.caddyReload();
+        await caddy.reload(CADDY_CONFIG_PATH(baseDir));
 
         // 2. Verify green container is running and healthy
         logStep("Verifying green container health");
@@ -110,7 +116,7 @@ describe("Dockswap E2E - Complete Caddy Integration", () => {
 
         // 4. Verify Caddy integration (should route to green)
         logStep("Verifying Caddy integration with green deployment");
-        await validateCaddyIntegration(baseDir, TEST_APP, GREEN_PORT, PROXY_PORT);
+        await caddy.validateIntegration(TEST_APP, GREEN_PORT, PROXY_PORT);
 
         // 5. Deploy to blue environment
         logStep("Deploying to blue environment");
@@ -129,7 +135,7 @@ describe("Dockswap E2E - Complete Caddy Integration", () => {
 
         // 8. Verify Caddy still routes to green (no switch yet)
         logStep("Verifying Caddy still routes to green");
-        await validateCaddyIntegration(baseDir, TEST_APP, GREEN_PORT, PROXY_PORT);
+        await caddy.validateIntegration(TEST_APP, GREEN_PORT, PROXY_PORT);
 
         // 9. Switch traffic to blue
         logStep("Switching traffic to blue");
@@ -143,7 +149,7 @@ describe("Dockswap E2E - Complete Caddy Integration", () => {
 
         // 11. Verify Caddy now routes to blue
         logStep("Verifying Caddy routes to blue");
-        await validateCaddyIntegration(baseDir, TEST_APP, BLUE_PORT, PROXY_PORT);
+        await caddy.validateIntegration(TEST_APP, BLUE_PORT, PROXY_PORT);
 
         // 12. Final verification - both containers should still be running
         logStep("Final verification - both containers running");
@@ -169,8 +175,8 @@ describe("Dockswap E2E - Complete Caddy Integration", () => {
 
         // 2. Verify Caddy config was generated
         logStep("Verifying Caddy configuration generation");
-        const configCheck = await run(`test -f ${baseDir}/caddy/caddy.json`, { allowFailure: true, silent: true, env });
-        expect(configCheck.success).toBe(true);
+        const configCheck = await caddy.configExists(CADDY_CONFIG_PATH(baseDir));
+        expect(configCheck).toBe(true);
         logSuccess("Caddy configuration file exists");
 
         // 3. Check Caddy template was created
@@ -187,13 +193,13 @@ describe("Dockswap E2E - Complete Caddy Integration", () => {
 
         // 4. Test Caddy reload functionality
         logStep("Testing Caddy reload functionality");
-        const reloadResult = await dockSwap.caddyReload();
-        expect(reloadResult.success).toBe(true);
+        const reloadResult = await caddy.reload(CADDY_CONFIG_PATH(baseDir));
+        // caddy.reload throws if fails, so no need to check result
         logSuccess("Caddy reload successful");
 
         // 5. Verify proxy is working (should route to green)
         logStep("Verifying proxy functionality");
-        await validateCaddyIntegration(baseDir, TEST_APP, GREEN_PORT, PROXY_PORT);
+        await caddy.validateIntegration(TEST_APP, GREEN_PORT, PROXY_PORT);
 
         logSuccess("Caddy configuration updates test passed");
     }, 60000); // 60 second timeout for this test
@@ -210,7 +216,7 @@ describe("Dockswap E2E - Complete Caddy Integration", () => {
         logStep("Performing initial deployment");
         await dockSwap.deploy(TEST_APP, TEST_IMAGE);
         // 1b. Force Caddy config reload after first deploy
-        await dockSwap.caddyReload();
+        await caddy.reload(CADDY_CONFIG_PATH(baseDir));
 
         // 2. Verify all state components are consistent
         logStep("Verifying state consistency after deployment");
@@ -222,7 +228,7 @@ describe("Dockswap E2E - Complete Caddy Integration", () => {
         await docker.validateContainerHealth(baseDir, TEST_APP, "green", GREEN_PORT);
 
         // Caddy state
-        await validateCaddyIntegration(baseDir, TEST_APP, GREEN_PORT, PROXY_PORT);
+        await caddy.validateIntegration(TEST_APP, GREEN_PORT, PROXY_PORT);
 
         // CLI status
         const cliStatus = await dockSwap.status(TEST_APP);
@@ -240,7 +246,7 @@ describe("Dockswap E2E - Complete Caddy Integration", () => {
         const afterSecondDeploy = await dockSwap.validateDatabaseState(TEST_APP, "green", TEST_IMAGE);
         await docker.validateContainerHealth(baseDir, TEST_APP, "green", GREEN_PORT);
         await docker.validateContainerHealth(baseDir, TEST_APP, "blue", BLUE_PORT);
-        await validateCaddyIntegration(baseDir, TEST_APP, GREEN_PORT, PROXY_PORT);
+        await caddy.validateIntegration(TEST_APP, GREEN_PORT, PROXY_PORT);
 
         // 5. Switch traffic
         logStep("Switching traffic");
@@ -252,7 +258,7 @@ describe("Dockswap E2E - Complete Caddy Integration", () => {
         const finalDbState = await dockSwap.validateDatabaseState(TEST_APP, "blue", TEST_IMAGE);
         await docker.validateContainerHealth(baseDir, TEST_APP, "green", GREEN_PORT);
         await docker.validateContainerHealth(baseDir, TEST_APP, "blue", BLUE_PORT);
-        await validateCaddyIntegration(baseDir, TEST_APP, BLUE_PORT, PROXY_PORT);
+        await caddy.validateIntegration(TEST_APP, BLUE_PORT, PROXY_PORT);
 
         const finalCliStatus = await dockSwap.status(TEST_APP);
         expect(finalCliStatus.activeColor).toBe("blue");
@@ -266,7 +272,7 @@ describe("Dockswap E2E - Complete Caddy Integration", () => {
 
         // 1. Stop Caddy to simulate failure
         logStep("Stopping Caddy to simulate failure");
-        await stopCaddy();
+        if (caddy) await caddy.stop();
         caddyStarted = false;
 
         // 2. Deploy green
