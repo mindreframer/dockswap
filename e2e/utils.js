@@ -54,13 +54,13 @@ export function logInfo(message) {
 }
 
 // Shell command execution with error handling
-export async function run(command, { silent = false, allowFailure = false, timeout = 30000 } = {}) {
+export async function run(command, { silent = false, allowFailure = false, timeout = 30000, env = process.env } = {}) {
   if (!silent) {
     log(`${colors.dim}$ ${command}${colors.reset}`);
   }
 
   try {
-    const result = await $`sh -c "${command}"`.quiet(silent);
+    const result = await $`sh -c "${command}"`.env(env).quiet(silent);
     return {
       success: true,
       stdout: result.stdout?.toString() || "",
