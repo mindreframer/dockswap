@@ -327,6 +327,27 @@ func GetCurrentState(db *sql.DB, appName string) (*CurrentState, error) {
 	`, appName)
 	var cs CurrentState
 	if err := row.Scan(&cs.AppName, &cs.DeploymentID, &cs.ActiveColor, &cs.Image, &cs.Status, &cs.UpdatedAt); err != nil {
+		if err == sql.ErrNoRows {
+			// Try to auto-initialize from latest deployment
+			deployments, derr := GetDeploymentHistory(db, appName)
+			if derr == nil && len(deployments) > 0 {
+				latest := deployments[0]
+				_ = UpsertCurrentState(db, appName, latest.ID, latest.ActiveColor, latest.Image, latest.Status)
+			} else {
+				// Fallback: use defaults
+				_ = UpsertCurrentState(db, appName, 0, "blue", "", "unknown")
+			}
+			// Re-query
+			row2 := db.QueryRow(`
+				SELECT app_name, deployment_id, active_color, image, status, updated_at
+				FROM current_state
+				WHERE app_name = ?
+			`, appName)
+			if err2 := row2.Scan(&cs.AppName, &cs.DeploymentID, &cs.ActiveColor, &cs.Image, &cs.Status, &cs.UpdatedAt); err2 != nil {
+				return nil, err2
+			}
+			return &cs, nil
+		}
 		return nil, err
 	}
 	return &cs, nil
