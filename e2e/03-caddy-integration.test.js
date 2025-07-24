@@ -6,7 +6,7 @@ import { describe, test, beforeEach, afterEach, expect } from "bun:test";
 import {
     log, logStep, logSuccess, logWarning, logInfo, run, setupE2EEnvironment, teardownE2EEnvironment,
     colors, resetStepCounter, startCaddy, stopCaddy, createTestAppConfig,
-    validateCaddyIntegration, validateDatabaseState, createTestTempDir, cleanupTestTempDir
+    validateCaddyIntegration, createTestTempDir, cleanupTestTempDir
 } from './utils.js';
 
 import { DockSwap } from './dockswap.page.js';
@@ -25,7 +25,19 @@ describe("Dockswap E2E - Complete Caddy Integration", () => {
     let caddyStarted = false;
     let baseDir;
     let env;
+
+    /**
+     * Instance of DockSwap class for controlling the dockswap CLI in tests.
+     * Provides methods for deployment, switching, status checks, and Caddy integration.
+     * @type {DockSwap}
+     */
     let dockSwap;
+
+
+    /**
+     * Instance of DockerTest class for Docker container assertions and health checks.
+     * @type {DockerTest}
+     */
     let docker;
 
     beforeEach(async () => {
@@ -38,7 +50,8 @@ describe("Dockswap E2E - Complete Caddy Integration", () => {
         env = { ...process.env, DOCKSWAP_CONFIG_DIR: baseDir };
         await createTestAppConfig(baseDir, TEST_APP, BLUE_PORT, GREEN_PORT, PROXY_PORT);
 
-        dockSwap = new DockSwap({ binPath: "./dockswap", env, baseDir });
+
+        dockSwap = new DockSwap({ binPath: "./dockswap", env, baseDir })
         docker = new DockerTest();
 
         log(`${colors.bold}${colors.blue}🚀 Setting up complete Caddy integration test environment${colors.reset}`);
@@ -93,7 +106,7 @@ describe("Dockswap E2E - Complete Caddy Integration", () => {
 
         // 3. Verify database state shows green as active
         logStep("Verifying database state");
-        const greenStatus = await validateDatabaseState(baseDir, TEST_APP, "green", TEST_IMAGE);
+        const greenStatus = await dockSwap.validateDatabaseState(TEST_APP, "green", TEST_IMAGE);
 
         // 4. Verify Caddy integration (should route to green)
         logStep("Verifying Caddy integration with green deployment");
@@ -112,7 +125,7 @@ describe("Dockswap E2E - Complete Caddy Integration", () => {
 
         // 7. Verify database state still shows green as active (no switch yet)
         logStep("Verifying database state after blue deployment");
-        const afterBlueStatus = await validateDatabaseState(baseDir, TEST_APP, "green", TEST_IMAGE);
+        const afterBlueStatus = await dockSwap.validateDatabaseState(TEST_APP, "green", TEST_IMAGE);
 
         // 8. Verify Caddy still routes to green (no switch yet)
         logStep("Verifying Caddy still routes to green");
@@ -126,7 +139,7 @@ describe("Dockswap E2E - Complete Caddy Integration", () => {
 
         // 10. Verify database state shows blue as active
         logStep("Verifying database state after switch");
-        const blueStatus = await validateDatabaseState(baseDir, TEST_APP, "blue", TEST_IMAGE);
+        const blueStatus = await dockSwap.validateDatabaseState(TEST_APP, "blue", TEST_IMAGE);
 
         // 11. Verify Caddy now routes to blue
         logStep("Verifying Caddy routes to blue");
@@ -203,7 +216,7 @@ describe("Dockswap E2E - Complete Caddy Integration", () => {
         logStep("Verifying state consistency after deployment");
 
         // Database state
-        const dbState = await validateDatabaseState(baseDir, TEST_APP, "green", TEST_IMAGE);
+        const dbState = await dockSwap.validateDatabaseState(TEST_APP, "green", TEST_IMAGE);
 
         // Container state
         await docker.validateContainerHealth(baseDir, TEST_APP, "green", GREEN_PORT);
@@ -224,7 +237,7 @@ describe("Dockswap E2E - Complete Caddy Integration", () => {
         logStep("Verifying state consistency after second deployment");
 
         // Should still be on green (no switch yet)
-        const afterSecondDeploy = await validateDatabaseState(baseDir, TEST_APP, "green", TEST_IMAGE);
+        const afterSecondDeploy = await dockSwap.validateDatabaseState(TEST_APP, "green", TEST_IMAGE);
         await docker.validateContainerHealth(baseDir, TEST_APP, "green", GREEN_PORT);
         await docker.validateContainerHealth(baseDir, TEST_APP, "blue", BLUE_PORT);
         await validateCaddyIntegration(baseDir, TEST_APP, GREEN_PORT, PROXY_PORT);
@@ -236,7 +249,7 @@ describe("Dockswap E2E - Complete Caddy Integration", () => {
         // 6. Verify final state consistency
         logStep("Verifying final state consistency");
 
-        const finalDbState = await validateDatabaseState(baseDir, TEST_APP, "blue", TEST_IMAGE);
+        const finalDbState = await dockSwap.validateDatabaseState(TEST_APP, "blue", TEST_IMAGE);
         await docker.validateContainerHealth(baseDir, TEST_APP, "green", GREEN_PORT);
         await docker.validateContainerHealth(baseDir, TEST_APP, "blue", BLUE_PORT);
         await validateCaddyIntegration(baseDir, TEST_APP, BLUE_PORT, PROXY_PORT);
@@ -278,7 +291,7 @@ describe("Dockswap E2E - Complete Caddy Integration", () => {
 
         // 6. Verify database state is correct (should still be green)
         logStep("Verifying database state");
-        await validateDatabaseState(baseDir, TEST_APP, "green", TEST_IMAGE);
+        await dockSwap.validateDatabaseState(TEST_APP, "green", TEST_IMAGE);
 
         // 7. Switch should work (with warning about Caddy)
         logStep("Testing switch without Caddy");
@@ -288,7 +301,7 @@ describe("Dockswap E2E - Complete Caddy Integration", () => {
 
         // 8. Verify final state
         logStep("Verifying final state");
-        await validateDatabaseState(baseDir, TEST_APP, "blue", TEST_IMAGE);
+        await dockSwap.validateDatabaseState(TEST_APP, "blue", TEST_IMAGE);
 
         logSuccess("Graceful Caddy failure handling test passed");
     }, 60000); // 60 second timeout for this test
