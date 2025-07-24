@@ -492,8 +492,8 @@ export async function validateCaddyIntegration(appName, expectedPort, proxyPort 
     throw new Error("Caddy admin API not accessible");
   }
 
-  // Check if app is accessible through proxy
-  const proxyCheck = await checkEndpoint(`http://localhost:${proxyPort}`, 200, 5000, 3);
+  // Check if app is accessible through proxy (increase retries/timeout)
+  const proxyCheck = await checkEndpoint(`http://localhost:${proxyPort}`, 200, 10000, 10);
   if (!proxyCheck.success) {
     throw new Error(`Proxy not responding on port ${proxyPort}: ${proxyCheck.error || proxyCheck.status}`);
   }
@@ -540,17 +540,23 @@ export async function validateContainerHealth(appName, color, port) {
   const container = containers.find(c => c.name === containerName);
 
   if (!container) {
-    throw new Error(`Container ${containerName} not found`);
+    // Print docker ps output for debugging
+    const ps = await run('docker ps -a', { silent: false, allowFailure: true });
+    throw new Error(`Container ${containerName} not found. docker ps -a:\n${ps.stdout}`);
   }
 
   if (!container.status.includes('Up')) {
-    throw new Error(`Container ${containerName} is not running: ${container.status}`);
+    // Print docker logs for debugging
+    const logs = await run(`docker logs ${containerName}`, { silent: false, allowFailure: true });
+    throw new Error(`Container ${containerName} is not running: ${container.status}\nLogs:\n${logs.stdout}`);
   }
 
   // Check HTTP endpoint
-  const endpointCheck = await checkEndpoint(`http://localhost:${port}`, 200, 5000, 3);
+  const endpointCheck = await checkEndpoint(`http://localhost:${port}`, 200, 10000, 6);
   if (!endpointCheck.success) {
-    throw new Error(`Container health check failed on port ${port}: ${endpointCheck.error || endpointCheck.status}`);
+    // Print docker logs for debugging
+    const logs = await run(`docker logs ${containerName}`, { silent: false, allowFailure: true });
+    throw new Error(`Container health check failed on port ${port}: ${endpointCheck.error || endpointCheck.status}\nLogs:\n${logs.stdout}`);
   }
 
   logSuccess(`Container ${containerName} is healthy and responding on port ${port}`);

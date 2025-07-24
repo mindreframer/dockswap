@@ -315,7 +315,12 @@ func (c *CLI) handleSwitch(args []string) error {
 
 	// Update database state to switch active color
 	fmt.Println("✓ Updating traffic routing...")
-	err = state.UpsertCurrentState(c.DB, appName, 0, color, "switched", "active")
+	// Use the image from the current state (cs) if available
+	image := ""
+	if cs != nil {
+		image = cs.Image
+	}
+	err = state.UpsertCurrentState(c.DB, appName, 0, color, image, "active")
 	if err != nil {
 		return fmt.Errorf("failed to update state: %w", err)
 	}
