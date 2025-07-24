@@ -4,11 +4,12 @@ import { describe, test, beforeEach, afterEach, expect } from "bun:test";
 
 // Import utilities
 import {
-    log, logStep, logSuccess, logError, logWarning, logInfo, run, setupE2EEnvironment, teardownE2EEnvironment,
-    colors, resetStepCounter, checkEndpoint, assertTrue, assertEqual, startCaddy, stopCaddy, createTestAppConfig,
-    validateCaddyIntegration, validateDatabaseState, validateContainerHealth, dockswapDeploy, dockswapSwitch, dockswapStatus,
-    createTestTempDir, cleanupTestTempDir
+    log, logStep, logSuccess, logWarning, logInfo, run, setupE2EEnvironment, teardownE2EEnvironment,
+    colors, resetStepCounter, startCaddy, stopCaddy, createTestAppConfig,
+    validateCaddyIntegration, validateDatabaseState, validateContainerHealth, createTestTempDir, cleanupTestTempDir
 } from './utils.js';
+
+import { DockSwap } from './dockswap.page.js';
 
 // Test configuration
 const TEST_APP = "caddy-integration-test";
@@ -17,13 +18,13 @@ const BLUE_PORT = 8081;
 const GREEN_PORT = 8082;
 const PROXY_PORT = 8080;
 const CADDY_CONFIG_PATH = (baseDir) => `${baseDir}/caddy/caddy.json`;
-const DOCKSWAP_BIN = "./dockswap";
 
 describe("Dockswap E2E - Complete Caddy Integration", () => {
     let testStartTime;
     let caddyStarted = false;
     let baseDir;
     let env;
+    let dockSwap;
 
     beforeEach(async () => {
         testStartTime = Date.now();
@@ -34,6 +35,8 @@ describe("Dockswap E2E - Complete Caddy Integration", () => {
         await run(`mkdir -p ${baseDir}/caddy`);
         env = { ...process.env, DOCKSWAP_CONFIG_DIR: baseDir };
         await createTestAppConfig(baseDir, TEST_APP, BLUE_PORT, GREEN_PORT, PROXY_PORT);
+
+        dockSwap = new DockSwap({ binPath: "./dockswap", env, baseDir });
 
         log(`${colors.bold}${colors.blue}🚀 Setting up complete Caddy integration test environment${colors.reset}`);
         await setupE2EEnvironment({ pullImages: [TEST_IMAGE], cleanup: true, baseDir });
@@ -74,12 +77,12 @@ describe("Dockswap E2E - Complete Caddy Integration", () => {
 
         // 1. Initial deployment to green
         logStep("Deploying to green environment");
-        const deployResult = await dockswapDeploy(baseDir, TEST_APP, TEST_IMAGE, DOCKSWAP_BIN);
+        const deployResult = await dockSwap.deploy(TEST_APP, TEST_IMAGE);
         expect(deployResult.success).toBe(true);
         logSuccess("Initial deployment completed");
 
         // 1b. Force Caddy config reload after first deploy
-        await run(`${DOCKSWAP_BIN} caddy reload`, { env });
+        await dockSwap.caddyReload();
 
         // 2. Verify green container is running and healthy
         logStep("Verifying green container health");
@@ -95,7 +98,7 @@ describe("Dockswap E2E - Complete Caddy Integration", () => {
 
         // 5. Deploy to blue environment
         logStep("Deploying to blue environment");
-        const secondDeployResult = await dockswapDeploy(baseDir, TEST_APP, TEST_IMAGE, DOCKSWAP_BIN);
+        const secondDeployResult = await dockSwap.deploy(TEST_APP, TEST_IMAGE);
         expect(secondDeployResult.success).toBe(true);
         logSuccess("Blue deployment completed");
 
@@ -114,7 +117,7 @@ describe("Dockswap E2E - Complete Caddy Integration", () => {
 
         // 9. Switch traffic to blue
         logStep("Switching traffic to blue");
-        const switchResult = await dockswapSwitch(baseDir, TEST_APP, "blue", DOCKSWAP_BIN);
+        const switchResult = await dockSwap.switch(TEST_APP, "blue");
         expect(switchResult.success).toBe(true);
         logSuccess("Traffic switched to blue");
 
@@ -149,7 +152,7 @@ describe("Dockswap E2E - Complete Caddy Integration", () => {
 
         // 1. Deploy initial version (green)
         logStep("Deploying initial version");
-        await dockswapDeploy(baseDir, TEST_APP, TEST_IMAGE, DOCKSWAP_BIN);
+        await dockSwap.deploy(TEST_APP, TEST_IMAGE);
 
         // 2. Verify Caddy config was generated
         logStep("Verifying Caddy configuration generation");
@@ -163,7 +166,7 @@ describe("Dockswap E2E - Complete Caddy Integration", () => {
         if (!templateCheck.success) {
             // Create template if it doesn't exist
             logStep("Creating Caddy template");
-            await run(`${DOCKSWAP_BIN} caddy config create`, { env });
+            await dockSwap.caddyConfigCreate();
             logSuccess("Caddy template created");
         } else {
             logSuccess("Caddy template already exists");
@@ -171,7 +174,7 @@ describe("Dockswap E2E - Complete Caddy Integration", () => {
 
         // 4. Test Caddy reload functionality
         logStep("Testing Caddy reload functionality");
-        const reloadResult = await run(`${DOCKSWAP_BIN} caddy reload`, { env });
+        const reloadResult = await dockSwap.caddyReload();
         expect(reloadResult.success).toBe(true);
         logSuccess("Caddy reload successful");
 
@@ -192,9 +195,9 @@ describe("Dockswap E2E - Complete Caddy Integration", () => {
 
         // 1. Initial deployment (green)
         logStep("Performing initial deployment");
-        await dockswapDeploy(baseDir, TEST_APP, TEST_IMAGE, DOCKSWAP_BIN);
+        await dockSwap.deploy(TEST_APP, TEST_IMAGE);
         // 1b. Force Caddy config reload after first deploy
-        await run(`${DOCKSWAP_BIN} caddy reload`, { env });
+        await dockSwap.caddyReload();
 
         // 2. Verify all state components are consistent
         logStep("Verifying state consistency after deployment");
@@ -209,13 +212,13 @@ describe("Dockswap E2E - Complete Caddy Integration", () => {
         await validateCaddyIntegration(baseDir, TEST_APP, GREEN_PORT, PROXY_PORT);
 
         // CLI status
-        const cliStatus = await dockswapStatus(baseDir, TEST_APP);
+        const cliStatus = await dockSwap.status(TEST_APP);
         expect(cliStatus.activeColor).toBe("green");
         expect(cliStatus.image).toBe(TEST_IMAGE);
 
         // 3. Deploy to blue
         logStep("Deploying to blue");
-        await dockswapDeploy(baseDir, TEST_APP, TEST_IMAGE, DOCKSWAP_BIN);
+        await dockSwap.deploy(TEST_APP, TEST_IMAGE);
 
         // 4. Verify state consistency after second deployment
         logStep("Verifying state consistency after second deployment");
@@ -228,7 +231,7 @@ describe("Dockswap E2E - Complete Caddy Integration", () => {
 
         // 5. Switch traffic
         logStep("Switching traffic");
-        await dockswapSwitch(baseDir, TEST_APP, "blue", DOCKSWAP_BIN);
+        await dockSwap.switch(TEST_APP, "blue");
 
         // 6. Verify final state consistency
         logStep("Verifying final state consistency");
@@ -238,7 +241,7 @@ describe("Dockswap E2E - Complete Caddy Integration", () => {
         await validateContainerHealth(baseDir, TEST_APP, "blue", BLUE_PORT);
         await validateCaddyIntegration(baseDir, TEST_APP, BLUE_PORT, PROXY_PORT);
 
-        const finalCliStatus = await dockswapStatus(baseDir, TEST_APP);
+        const finalCliStatus = await dockSwap.status(TEST_APP);
         expect(finalCliStatus.activeColor).toBe("blue");
         expect(finalCliStatus.image).toBe(TEST_IMAGE);
 
@@ -255,13 +258,13 @@ describe("Dockswap E2E - Complete Caddy Integration", () => {
 
         // 2. Deploy green
         logStep("Deploying without Caddy (green)");
-        const deployResult = await dockswapDeploy(baseDir, TEST_APP, TEST_IMAGE, DOCKSWAP_BIN);
+        const deployResult = await dockSwap.deploy(TEST_APP, TEST_IMAGE);
         expect(deployResult.success).toBe(true);
         logSuccess("Deployment succeeded without Caddy");
 
         // 3. Deploy blue
         logStep("Deploying blue without Caddy");
-        const deployBlueResult = await dockswapDeploy(baseDir, TEST_APP, TEST_IMAGE, DOCKSWAP_BIN);
+        const deployBlueResult = await dockSwap.deploy(TEST_APP, TEST_IMAGE);
         expect(deployBlueResult.success).toBe(true);
         logSuccess("Blue deployment succeeded without Caddy");
 
@@ -279,7 +282,7 @@ describe("Dockswap E2E - Complete Caddy Integration", () => {
 
         // 7. Switch should work (with warning about Caddy)
         logStep("Testing switch without Caddy");
-        const switchResult = await dockswapSwitch(baseDir, TEST_APP, "blue", DOCKSWAP_BIN);
+        const switchResult = await dockSwap.switch(TEST_APP, "blue");
         expect(switchResult.success).toBe(true);
         logSuccess("Switch succeeded without Caddy");
 
