@@ -57,7 +57,7 @@ export async function run(command, { silent = false, allowFailure = false, timeo
   }
 
   try {
-    const result = await $`sh -c ${command}`.quiet(silent);
+    const result = await $`sh -c "${command}"`.quiet(silent);
     return {
       success: true,
       stdout: result.stdout?.toString() || "",
@@ -316,4 +316,243 @@ export async function teardownE2EEnvironment() {
   await cleanupDockswapContainers();
   await cleanupDockswapDatabase();
   logSuccess("E2E environment torn down");
+}
+
+// Caddy management utilities
+export async function startCaddy(configPath, adminPort = 2019) {
+  logInfo(`Starting Caddy with config: ${configPath}`);
+
+  // Kill any existing Caddy processes
+  await run("pkill -f caddy || true", { allowFailure: true, silent: true });
+
+  // Create config directory
+  const configDir = configPath.substring(0, configPath.lastIndexOf('/'));
+  await run(`mkdir -p ${configDir}`);
+
+  // Create minimal config if it doesn't exist
+  const configExists = await run(`test -f ${configPath}`, { allowFailure: true, silent: true });
+  if (!configExists.success) {
+    const minimalConfig = {
+      "admin": {
+        "listen": `:${adminPort}`
+      },
+      "apps": {
+        "http": {
+          "servers": {
+            "default": {
+              "listen": [":8080"],
+              "automatic_https": {
+                "disable": true
+              },
+              "routes": [
+                {
+                  "handle": [
+                    {
+                      "handler": "static_response",
+                      "body": "Caddy is running"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    };
+
+    await run(`echo '${JSON.stringify(minimalConfig)}' > ${configPath}`);
+    logInfo("Created minimal Caddy config");
+  }
+
+  // Start Caddy in background using nohup to avoid Bun.sh hanging
+  const result = await run(`nohup caddy start --config ${configPath} > /dev/null 2>&1 &`, {
+    allowFailure: true,
+    silent: true
+  });
+
+  // Give Caddy a moment to start
+  await new Promise(resolve => setTimeout(resolve, 2000));
+
+  // Wait for Caddy to be ready
+  await waitFor(async () => {
+    const check = await run(`curl -s -o /dev/null -w "%{http_code}" http://localhost:${adminPort}/config/`, {
+      silent: true,
+      allowFailure: true
+    });
+    return check.success && check.stdout === "200";
+  }, { timeout: 10000, message: "Caddy admin API" });
+
+  logSuccess("Caddy started successfully");
+  return result;
+}
+
+export async function stopCaddy() {
+  logInfo("Stopping Caddy...");
+
+  // Kill Caddy processes more aggressively
+  await run("pkill -f 'caddy start'", { allowFailure: true, silent: true });
+  await run("pkill -f 'caddy run'", { allowFailure: true, silent: true });
+  await run("pkill -f caddy", { allowFailure: true, silent: true });
+
+  // Wait a moment for processes to stop
+  await new Promise(resolve => setTimeout(resolve, 1000));
+
+  // Check if any Caddy processes are still running
+  const checkResult = await run("pgrep -f caddy", { allowFailure: true, silent: true });
+  if (checkResult.success) {
+    logWarning("Some Caddy processes may still be running");
+  } else {
+    logSuccess("Caddy stopped");
+  }
+  return checkResult;
+}
+
+export async function createTestAppConfig(appName, bluePort, greenPort, proxyPort = 8080) {
+  const config = {
+    name: appName,
+    description: "Test app for Caddy integration",
+    docker: {
+      memory_limit: "256m",
+      environment: {
+        NGINX_HOST: "localhost"
+      },
+      expose_port: 80
+    },
+    ports: {
+      blue: bluePort,
+      green: greenPort
+    },
+    health_check: {
+      endpoint: "/",
+      method: "GET",
+      timeout: "5s",
+      interval: "10s",
+      retries: 3,
+      success_threshold: 1,
+      expected_status: 200
+    },
+    deployment: {
+      startup_delay: "30s",
+      drain_timeout: "60s",
+      stop_timeout: "30s",
+      auto_rollback: false
+    },
+    proxy: {
+      listen_port: proxyPort,
+      host: "localhost"
+    }
+  };
+
+  const configPath = `dockswap-cfg/apps/${appName}.yaml`;
+
+  // Create proper YAML format
+  const configYaml = `name: "${config.name}"
+description: "${config.description}"
+docker:
+  memory_limit: "${config.docker.memory_limit}"
+  environment:
+    NGINX_HOST: "${config.docker.environment.NGINX_HOST}"
+  expose_port: ${config.docker.expose_port}
+ports:
+  blue: ${config.ports.blue}
+  green: ${config.ports.green}
+health_check:
+  endpoint: "${config.health_check.endpoint}"
+  method: "${config.health_check.method}"
+  timeout: "${config.health_check.timeout}"
+  interval: "${config.health_check.interval}"
+  retries: ${config.health_check.retries}
+  success_threshold: ${config.health_check.success_threshold}
+  expected_status: ${config.health_check.expected_status}
+deployment:
+  startup_delay: "${config.deployment.startup_delay}"
+  drain_timeout: "${config.deployment.drain_timeout}"
+  stop_timeout: "${config.deployment.stop_timeout}"
+  auto_rollback: ${config.deployment.auto_rollback}
+proxy:
+  listen_port: ${config.proxy.listen_port}
+  host: "${config.proxy.host}"`;
+
+  await run(`mkdir -p dockswap-cfg/apps`);
+  await run(`echo '${configYaml}' > ${configPath}`);
+  logSuccess(`Created test app config: ${configPath}`);
+  return configPath;
+}
+
+export async function validateCaddyIntegration(appName, expectedPort, proxyPort = 8080) {
+  logStep(`Validating Caddy integration for ${appName}`);
+
+  // Check if Caddy is running
+  const caddyCheck = await run(`curl -s -o /dev/null -w "%{http_code}" http://localhost:2019/config/`, {
+    silent: true,
+    allowFailure: true
+  });
+
+  if (!caddyCheck.success || caddyCheck.stdout !== "200") {
+    throw new Error("Caddy admin API not accessible");
+  }
+
+  // Check if app is accessible through proxy
+  const proxyCheck = await checkEndpoint(`http://localhost:${proxyPort}`, 200, 5000, 3);
+  if (!proxyCheck.success) {
+    throw new Error(`Proxy not responding on port ${proxyPort}: ${proxyCheck.error || proxyCheck.status}`);
+  }
+
+  // Verify the response comes from the expected container
+  const response = await run(`curl -s http://localhost:${proxyPort}`, { silent: true });
+  if (!response.success) {
+    throw new Error("Failed to get response from proxy");
+  }
+
+  logSuccess(`Caddy integration validated - proxy responding on port ${proxyPort}`);
+  return true;
+}
+
+export async function validateDatabaseState(appName, expectedColor, expectedImage) {
+  logStep(`Validating database state for ${appName}`);
+
+  // Check current state
+  const statusResult = await run(`./dockswap status ${appName}`, { silent: true });
+  if (!statusResult.success) {
+    throw new Error(`Failed to get status: ${statusResult.stderr}`);
+  }
+
+  const status = await dockswapStatus(appName);
+
+  if (status.activeColor !== expectedColor) {
+    throw new Error(`Expected active color ${expectedColor}, got ${status.activeColor}`);
+  }
+
+  if (status.image !== expectedImage) {
+    throw new Error(`Expected image ${expectedImage}, got ${status.image}`);
+  }
+
+  logSuccess(`Database state validated - Active: ${status.activeColor}, Image: ${status.image}`);
+  return status;
+}
+
+export async function validateContainerHealth(appName, color, port) {
+  logStep(`Validating container health for ${appName}-${color}`);
+
+  // Check container is running
+  const containers = await getDockswapContainers();
+  const containerName = `${appName}-${color}`;
+  const container = containers.find(c => c.name === containerName);
+
+  if (!container) {
+    throw new Error(`Container ${containerName} not found`);
+  }
+
+  if (!container.status.includes('Up')) {
+    throw new Error(`Container ${containerName} is not running: ${container.status}`);
+  }
+
+  // Check HTTP endpoint
+  const endpointCheck = await checkEndpoint(`http://localhost:${port}`, 200, 5000, 3);
+  if (!endpointCheck.success) {
+    throw new Error(`Container health check failed on port ${port}: ${endpointCheck.error || endpointCheck.status}`);
+  }
+
+  logSuccess(`Container ${containerName} is healthy and responding on port ${port}`);
+  return true;
 }

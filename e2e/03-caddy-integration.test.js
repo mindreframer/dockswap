@@ -1,0 +1,275 @@
+#!/usr/bin/env bun
+
+import { describe, test, beforeEach, afterEach, expect } from "bun:test";
+
+// Import utilities
+import {
+    log, logStep, logSuccess, logError, logWarning, logInfo, run, setupE2EEnvironment, teardownE2EEnvironment,
+    colors, resetStepCounter, checkEndpoint, assertTrue, assertEqual, startCaddy, stopCaddy, createTestAppConfig,
+    validateCaddyIntegration, validateDatabaseState, validateContainerHealth, dockswapDeploy, dockswapSwitch, dockswapStatus
+} from './utils.js';
+
+// Test configuration
+const TEST_APP = "caddy-integration-test";
+const TEST_IMAGE = "nginx:alpine";
+const BLUE_PORT = 8081;
+const GREEN_PORT = 8082;
+const PROXY_PORT = 8080;
+const CADDY_CONFIG_PATH = "dockswap-cfg/caddy/caddy.json";
+const DOCKSWAP_BIN = "./dockswap";
+
+describe("Dockswap E2E - Complete Caddy Integration", () => {
+    let testStartTime;
+    let caddyStarted = false;
+
+    beforeEach(async () => {
+        testStartTime = Date.now();
+        resetStepCounter();
+
+        log(`${colors.bold}${colors.blue}🚀 Setting up complete Caddy integration test environment${colors.reset}`);
+
+        // Setup basic environment
+        await setupE2EEnvironment({
+            pullImages: [TEST_IMAGE],
+            cleanup: true
+        });
+
+        // Start Caddy
+        try {
+            await startCaddy(CADDY_CONFIG_PATH);
+            caddyStarted = true;
+            logSuccess("Caddy started for testing");
+        } catch (error) {
+            logWarning(`Failed to start Caddy: ${error.message}`);
+            logInfo("Test will continue without Caddy integration");
+            caddyStarted = false;
+        }
+
+        // Create test app configuration
+        await createTestAppConfig(TEST_APP, BLUE_PORT, GREEN_PORT, PROXY_PORT);
+    });
+
+    afterEach(async () => {
+        const duration = ((Date.now() - testStartTime) / 1000).toFixed(2);
+        log(`${colors.dim}Test completed in ${duration}s${colors.reset}`);
+
+        // Stop Caddy if we started it
+        if (caddyStarted) {
+            await stopCaddy();
+        }
+
+        await teardownE2EEnvironment();
+    });
+
+    test("should perform complete blue-green deployment with Caddy integration", async () => {
+        logStep("Testing complete blue-green deployment with Caddy integration");
+
+        // Skip test if Caddy is not available
+        if (!caddyStarted) {
+            logWarning("Caddy not available - skipping integration test");
+            return;
+        }
+
+        // 1. Initial deployment to blue
+        logStep("Deploying to blue environment");
+        const deployResult = await dockswapDeploy(TEST_APP, TEST_IMAGE, DOCKSWAP_BIN);
+        expect(deployResult.success).toBe(true);
+        logSuccess("Initial deployment completed");
+
+        // 2. Verify blue container is running and healthy
+        logStep("Verifying blue container health");
+        await validateContainerHealth(TEST_APP, "blue", BLUE_PORT);
+
+        // 3. Verify database state shows blue as active
+        logStep("Verifying database state");
+        const blueStatus = await validateDatabaseState(TEST_APP, "blue", TEST_IMAGE);
+
+        // 4. Verify Caddy integration (should route to blue)
+        logStep("Verifying Caddy integration with blue deployment");
+        await validateCaddyIntegration(TEST_APP, BLUE_PORT, PROXY_PORT);
+
+        // 5. Deploy to green environment
+        logStep("Deploying to green environment");
+        const secondDeployResult = await dockswapDeploy(TEST_APP, TEST_IMAGE, DOCKSWAP_BIN);
+        expect(secondDeployResult.success).toBe(true);
+        logSuccess("Green deployment completed");
+
+        // 6. Verify both containers are running
+        logStep("Verifying both containers are running");
+        await validateContainerHealth(TEST_APP, "blue", BLUE_PORT);
+        await validateContainerHealth(TEST_APP, "green", GREEN_PORT);
+
+        // 7. Verify database state still shows blue as active (no switch yet)
+        logStep("Verifying database state after green deployment");
+        const afterGreenStatus = await validateDatabaseState(TEST_APP, "blue", TEST_IMAGE);
+
+        // 8. Verify Caddy still routes to blue (no switch yet)
+        logStep("Verifying Caddy still routes to blue");
+        await validateCaddyIntegration(TEST_APP, BLUE_PORT, PROXY_PORT);
+
+        // 9. Switch traffic to green
+        logStep("Switching traffic to green");
+        const switchResult = await dockswapSwitch(TEST_APP, "green", DOCKSWAP_BIN);
+        expect(switchResult.success).toBe(true);
+        logSuccess("Traffic switched to green");
+
+        // 10. Verify database state shows green as active
+        logStep("Verifying database state after switch");
+        const greenStatus = await validateDatabaseState(TEST_APP, "green", TEST_IMAGE);
+
+        // 11. Verify Caddy now routes to green
+        logStep("Verifying Caddy routes to green");
+        await validateCaddyIntegration(TEST_APP, GREEN_PORT, PROXY_PORT);
+
+        // 12. Final verification - both containers should still be running
+        logStep("Final verification - both containers running");
+        const containers = await run(
+            `docker ps --filter "label=dockswap.managed=true" --format "{{.Names}}\t{{.Status}}"`,
+            { silent: true }
+        );
+        const runningContainers = containers.stdout.trim().split('\n').filter(line => line.trim());
+        expect(runningContainers.length).toBe(2);
+        logSuccess(`Both containers running: ${runningContainers.map(c => c.split('\t')[0]).join(', ')}`);
+
+        logSuccess("Complete blue-green deployment with Caddy integration test passed");
+    });
+
+    test("should handle Caddy configuration updates during deployment", async () => {
+        logStep("Testing Caddy configuration updates during deployment");
+
+        if (!caddyStarted) {
+            logWarning("Caddy not available - skipping configuration test");
+            return;
+        }
+
+        // 1. Deploy initial version
+        logStep("Deploying initial version");
+        await dockswapDeploy(TEST_APP, TEST_IMAGE, DOCKSWAP_BIN);
+
+        // 2. Verify Caddy config was generated
+        logStep("Verifying Caddy configuration generation");
+        const configCheck = await run(`test -f ${CADDY_CONFIG_PATH}`, { allowFailure: true, silent: true });
+        expect(configCheck.success).toBe(true);
+        logSuccess("Caddy configuration file exists");
+
+        // 3. Check Caddy template was created
+        logStep("Verifying Caddy template creation");
+        const templateCheck = await run("test -f dockswap-cfg/caddy/template.json", { allowFailure: true, silent: true });
+        if (!templateCheck.success) {
+            // Create template if it doesn't exist
+            logStep("Creating Caddy template");
+            await run(`${DOCKSWAP_BIN} caddy config create`);
+            logSuccess("Caddy template created");
+        } else {
+            logSuccess("Caddy template already exists");
+        }
+
+        // 4. Test Caddy reload functionality
+        logStep("Testing Caddy reload functionality");
+        const reloadResult = await run(`${DOCKSWAP_BIN} caddy reload`);
+        expect(reloadResult.success).toBe(true);
+        logSuccess("Caddy reload successful");
+
+        // 5. Verify proxy is working
+        logStep("Verifying proxy functionality");
+        await validateCaddyIntegration(TEST_APP, BLUE_PORT, PROXY_PORT);
+
+        logSuccess("Caddy configuration updates test passed");
+    });
+
+    test("should validate complete workflow state consistency", async () => {
+        logStep("Testing complete workflow state consistency");
+
+        if (!caddyStarted) {
+            logWarning("Caddy not available - skipping state consistency test");
+            return;
+        }
+
+        // 1. Initial deployment
+        logStep("Performing initial deployment");
+        await dockswapDeploy(TEST_APP, TEST_IMAGE, DOCKSWAP_BIN);
+
+        // 2. Verify all state components are consistent
+        logStep("Verifying state consistency after deployment");
+
+        // Database state
+        const dbState = await validateDatabaseState(TEST_APP, "blue", TEST_IMAGE);
+
+        // Container state
+        await validateContainerHealth(TEST_APP, "blue", BLUE_PORT);
+
+        // Caddy state
+        await validateCaddyIntegration(TEST_APP, BLUE_PORT, PROXY_PORT);
+
+        // CLI status
+        const cliStatus = await dockswapStatus(TEST_APP);
+        expect(cliStatus.activeColor).toBe("blue");
+        expect(cliStatus.image).toBe(TEST_IMAGE);
+
+        // 3. Deploy to second color
+        logStep("Deploying to second color");
+        await dockswapDeploy(TEST_APP, TEST_IMAGE, DOCKSWAP_BIN);
+
+        // 4. Verify state consistency after second deployment
+        logStep("Verifying state consistency after second deployment");
+
+        // Should still be on blue (no switch yet)
+        const afterSecondDeploy = await validateDatabaseState(TEST_APP, "blue", TEST_IMAGE);
+        await validateContainerHealth(TEST_APP, "blue", BLUE_PORT);
+        await validateContainerHealth(TEST_APP, "green", GREEN_PORT);
+        await validateCaddyIntegration(TEST_APP, BLUE_PORT, PROXY_PORT);
+
+        // 5. Switch traffic
+        logStep("Switching traffic");
+        await dockswapSwitch(TEST_APP, "green", DOCKSWAP_BIN);
+
+        // 6. Verify final state consistency
+        logStep("Verifying final state consistency");
+
+        const finalDbState = await validateDatabaseState(TEST_APP, "green", TEST_IMAGE);
+        await validateContainerHealth(TEST_APP, "blue", BLUE_PORT);
+        await validateContainerHealth(TEST_APP, "green", GREEN_PORT);
+        await validateCaddyIntegration(TEST_APP, GREEN_PORT, PROXY_PORT);
+
+        const finalCliStatus = await dockswapStatus(TEST_APP);
+        expect(finalCliStatus.activeColor).toBe("green");
+        expect(finalCliStatus.image).toBe(TEST_IMAGE);
+
+        logSuccess("Complete workflow state consistency test passed");
+    });
+
+    test("should handle Caddy failures gracefully", async () => {
+        logStep("Testing graceful handling of Caddy failures");
+
+        // 1. Stop Caddy to simulate failure
+        logStep("Stopping Caddy to simulate failure");
+        await stopCaddy();
+        caddyStarted = false;
+
+        // 2. Deploy should still work without Caddy
+        logStep("Deploying without Caddy");
+        const deployResult = await dockswapDeploy(TEST_APP, TEST_IMAGE, DOCKSWAP_BIN);
+        expect(deployResult.success).toBe(true);
+        logSuccess("Deployment succeeded without Caddy");
+
+        // 3. Verify container is running
+        logStep("Verifying container is running");
+        await validateContainerHealth(TEST_APP, "blue", BLUE_PORT);
+
+        // 4. Verify database state is correct
+        logStep("Verifying database state");
+        await validateDatabaseState(TEST_APP, "blue", TEST_IMAGE);
+
+        // 5. Switch should work (with warning about Caddy)
+        logStep("Testing switch without Caddy");
+        const switchResult = await dockswapSwitch(TEST_APP, "green", DOCKSWAP_BIN);
+        expect(switchResult.success).toBe(true);
+        logSuccess("Switch succeeded without Caddy");
+
+        // 6. Verify final state
+        logStep("Verifying final state");
+        await validateDatabaseState(TEST_APP, "green", TEST_IMAGE);
+
+        logSuccess("Graceful Caddy failure handling test passed");
+    });
+}); 

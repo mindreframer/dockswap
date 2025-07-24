@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"dockswap/internal/config"
 	"dockswap/internal/docker"
 	"dockswap/internal/state"
 	"fmt"
@@ -107,6 +108,21 @@ func (c *CLI) handleDeploy(args []string) error {
 	}
 
 	fmt.Println("✓ Container healthy and ready")
+
+	// Update Caddy configuration if this is the first deployment
+	if cs == nil && c.caddyMgr != nil {
+		fmt.Println("✓ Updating Caddy configuration for initial deployment...")
+		if err := c.generateCaddyConfig(); err != nil {
+			fmt.Printf("Warning: failed to generate Caddy config: %v\n", err)
+		} else {
+			if err := c.caddyMgr.ReloadCaddy(); err != nil {
+				fmt.Printf("Warning: failed to reload Caddy: %v\n", err)
+			} else {
+				fmt.Println("✓ Caddy configuration updated")
+			}
+		}
+	}
+
 	if cs == nil {
 		// First deployment
 		fmt.Printf("✓ Initial deployment complete - traffic active on %s\n", targetColor)
@@ -304,9 +320,22 @@ func (c *CLI) handleSwitch(args []string) error {
 		return fmt.Errorf("failed to update state: %w", err)
 	}
 
-	// TODO: In a real implementation, this would update Caddy config
-	fmt.Println("✓ Load balancer configuration updated")
-	
+	// Update Caddy configuration if available
+	if c.caddyMgr != nil {
+		fmt.Println("✓ Updating Caddy configuration...")
+		if err := c.generateCaddyConfig(); err != nil {
+			fmt.Printf("Warning: failed to generate Caddy config: %v\n", err)
+		} else {
+			if err := c.caddyMgr.ReloadCaddy(); err != nil {
+				fmt.Printf("Warning: failed to reload Caddy: %v\n", err)
+			} else {
+				fmt.Println("✓ Caddy configuration updated")
+			}
+		}
+	} else {
+		fmt.Println("✓ Load balancer configuration updated (Caddy not configured)")
+	}
+
 	// Optionally stop old container if configured
 	if appConfig.Deployment.AutoRollback {
 		fmt.Printf("✓ Stopping old %s container...\n", oldColor)
@@ -381,4 +410,169 @@ func (c *CLI) handleVersion(args []string) error {
 	fmt.Printf("dockswap version %s\n", Version)
 	fmt.Println("Built with Go")
 	return nil
+}
+
+func (c *CLI) handleCaddy(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("caddy subcommand required. Use 'caddy status' or 'caddy reload'")
+	}
+
+	subcommand := args[0]
+	subArgs := args[1:]
+
+	switch subcommand {
+	case "status":
+		return c.handleCaddyStatus(subArgs)
+	case "reload":
+		return c.handleCaddyReload(subArgs)
+	case "config":
+		return c.handleCaddyConfig(subArgs)
+	default:
+		return fmt.Errorf("unknown caddy subcommand: %s. Use 'status', 'reload', or 'config'", subcommand)
+	}
+}
+
+func (c *CLI) handleCaddyStatus(args []string) error {
+	if c.caddyMgr == nil {
+		return fmt.Errorf("caddy manager not initialized - no app configs loaded")
+	}
+
+	fmt.Println("Caddy Status:")
+
+	// Check if template exists (always show this)
+	if c.caddyMgr.HasTemplate() {
+		fmt.Printf("  Template: %s\n", "✅ Found")
+	} else {
+		fmt.Printf("  Template: %s\n", "❌ Missing")
+		fmt.Println("  Run 'dockswap caddy config create' to create default template")
+	}
+
+	// Check if Caddy is running
+	err := c.caddyMgr.ValidateCaddyRunning()
+	if err != nil {
+		fmt.Printf("  Status: %s\n", "❌ Not running")
+		fmt.Printf("  Error: %v\n", err)
+		fmt.Println("  To start Caddy, run: caddy run --config /path/to/caddy.json")
+		return nil
+	}
+
+	fmt.Printf("  Status: %s\n", "✅ Running")
+	fmt.Printf("  Admin URL: %s\n", c.caddyMgr.AdminURL)
+
+	return nil
+}
+
+func (c *CLI) handleCaddyReload(args []string) error {
+	if c.caddyMgr == nil {
+		return fmt.Errorf("caddy manager not initialized - no app configs loaded")
+	}
+
+	fmt.Println("Reloading Caddy configuration...")
+
+	// Check if Caddy is running
+	if err := c.caddyMgr.ValidateCaddyRunning(); err != nil {
+		return fmt.Errorf("caddy is not running: %w", err)
+	}
+
+	// Generate config from current app states
+	if err := c.generateCaddyConfig(); err != nil {
+		return fmt.Errorf("failed to generate caddy config: %w", err)
+	}
+
+	// Reload Caddy
+	if err := c.caddyMgr.ReloadCaddy(); err != nil {
+		return fmt.Errorf("failed to reload caddy: %w", err)
+	}
+
+	fmt.Println("✅ Caddy configuration reloaded successfully")
+	return nil
+}
+
+func (c *CLI) handleCaddyConfig(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("config subcommand required. Use 'caddy config create' or 'caddy config show'")
+	}
+
+	subcommand := args[0]
+	subArgs := args[1:]
+
+	switch subcommand {
+	case "create":
+		return c.handleCaddyConfigCreate(subArgs)
+	case "show":
+		return c.handleCaddyConfigShow(subArgs)
+	default:
+		return fmt.Errorf("unknown config subcommand: %s. Use 'create' or 'show'", subcommand)
+	}
+}
+
+func (c *CLI) handleCaddyConfigCreate(args []string) error {
+	if c.caddyMgr == nil {
+		return fmt.Errorf("caddy manager not initialized - no app configs loaded")
+	}
+
+	fmt.Println("Creating default Caddy template...")
+
+	if err := c.caddyMgr.CreateDefaultTemplate(); err != nil {
+		return fmt.Errorf("failed to create default template: %w", err)
+	}
+
+	fmt.Printf("✅ Default template created at: %s\n", c.caddyMgr.GetTemplatePath())
+	return nil
+}
+
+func (c *CLI) handleCaddyConfigShow(args []string) error {
+	if c.caddyMgr == nil {
+		return fmt.Errorf("caddy manager not initialized - no app configs loaded")
+	}
+
+	fmt.Printf("Caddy Configuration:\n")
+	fmt.Printf("  Config Path: %s\n", c.caddyMgr.GetConfigPath())
+	fmt.Printf("  Template Path: %s\n", c.caddyMgr.GetTemplatePath())
+	fmt.Printf("  Admin URL: %s\n", c.caddyMgr.AdminURL)
+
+	if c.caddyMgr.HasTemplate() {
+		fmt.Printf("  Template: ✅ Found\n")
+	} else {
+		fmt.Printf("  Template: ❌ Missing\n")
+	}
+
+	return nil
+}
+
+func (c *CLI) generateCaddyConfig() error {
+	if c.caddyMgr == nil {
+		return fmt.Errorf("caddy manager not initialized")
+	}
+
+	// Get current states for all apps
+	states := make(map[string]*state.AppState)
+	validConfigs := make(map[string]*config.AppConfig)
+
+	for appName, appConfig := range c.configs {
+		cs, err := state.GetCurrentState(c.DB, appName)
+		if err != nil {
+			// Skip apps without state
+			continue
+		}
+		if cs != nil {
+			// Convert CurrentState to AppState
+			appState := &state.AppState{
+				Name:        cs.AppName,
+				ActiveColor: cs.ActiveColor,
+				Status:      cs.Status,
+				LastUpdated: cs.UpdatedAt,
+			}
+			states[appName] = appState
+			validConfigs[appName] = appConfig
+		}
+	}
+
+	// Only generate config if we have valid states
+	if len(states) == 0 {
+		return fmt.Errorf("no apps with valid state found")
+	}
+
+	// Generate config
+	return c.caddyMgr.GenerateConfig(validConfigs, states)
 }

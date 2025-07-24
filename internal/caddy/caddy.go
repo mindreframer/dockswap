@@ -51,7 +51,7 @@ func (cm *CaddyManager) SetAdminURL(url string) {
 }
 
 func (cm *CaddyManager) ValidateCaddyRunning() error {
-	resp, err := cm.client.Get(cm.AdminURL + "/")
+	resp, err := cm.client.Get(cm.AdminURL + "/config/")
 	if err != nil {
 		return fmt.Errorf("caddy admin API not accessible at %s: %w", cm.AdminURL, err)
 	}
@@ -206,6 +206,9 @@ func (cm *CaddyManager) CreateDefaultTemplate() error {
         {{range .Apps}}
         "{{.Name}}": {
           "listen": [":{{.Proxy.ListenPort}}"],
+          "automatic_https": {
+            "disable": true
+          },
           {{if .Proxy.Host}}
           "routes": [
             {

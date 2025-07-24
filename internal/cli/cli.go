@@ -2,6 +2,7 @@ package cli
 
 import (
 	"database/sql"
+	"dockswap/internal/caddy"
 	"dockswap/internal/config"
 	"fmt"
 	"strconv"
@@ -16,16 +17,18 @@ type GlobalFlags struct {
 }
 
 type CLI struct {
-	flags   GlobalFlags
-	DB      *sql.DB // Add DB handle for inspection commands
-	configs map[string]*config.AppConfig
+	flags    GlobalFlags
+	DB       *sql.DB // Add DB handle for inspection commands
+	configs  map[string]*config.AppConfig
+	caddyMgr *caddy.CaddyManager
 }
 
 // New creates a CLI with a DB handle.
 func New(db *sql.DB) *CLI {
 	return &CLI{
-		DB:      db,
-		configs: make(map[string]*config.AppConfig),
+		DB:       db,
+		configs:  make(map[string]*config.AppConfig),
+		caddyMgr: nil, // Will be initialized when configs are loaded
 	}
 }
 
@@ -37,6 +40,14 @@ func (c *CLI) LoadConfigs(configDir string) error {
 		return fmt.Errorf("failed to load app configs: %w", err)
 	}
 	c.configs = configs
+
+	// Initialize Caddy manager if we have configs
+	if len(configs) > 0 {
+		caddyConfigPath := configDir + "/caddy/config.json"
+		caddyTemplatePath := configDir + "/caddy/template.json"
+		c.caddyMgr = caddy.New(caddyConfigPath, caddyTemplatePath)
+	}
+
 	return nil
 }
 
@@ -109,6 +120,8 @@ func (c *CLI) Run(args []string) error {
 		return c.handleLogs(commandArgs)
 	case "config":
 		return c.handleConfig(commandArgs)
+	case "caddy":
+		return c.handleCaddy(commandArgs)
 	case "version":
 		return c.handleVersion(commandArgs)
 	case "help", "-h", "--help":
@@ -133,6 +146,10 @@ Commands:
   switch <app-name> <color>       Switch traffic to blue or green deployment
   logs <app-name> [--follow]      Show logs for application
   config reload [app-name]        Reload configuration for all apps or specific app
+  caddy status                    Show Caddy proxy status
+  caddy reload                    Reload Caddy configuration
+  caddy config create             Create default Caddy template
+  caddy config show               Show Caddy configuration paths
   version                         Show version information
   help                           Show this help message
 
@@ -145,5 +162,7 @@ Examples:
   dockswap deploy myapp nginx:1.21
   dockswap switch myapp blue
   dockswap logs myapp --follow
+  dockswap caddy status           # Check Caddy proxy status
+  dockswap caddy reload           # Reload Caddy configuration
 `)
 }
