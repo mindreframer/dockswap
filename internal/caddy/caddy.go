@@ -67,7 +67,15 @@ func (cm *CaddyManager) ValidateCaddyRunning() error {
 func (cm *CaddyManager) GenerateConfig(configs map[string]*config.AppConfig, states interface{}) error {
 	templateContent, err := os.ReadFile(cm.TemplatePath)
 	if err != nil {
-		return fmt.Errorf("failed to read template file %s: %w", cm.TemplatePath, err)
+		if os.IsNotExist(err) {
+			if createErr := cm.CreateDefaultTemplate(); createErr != nil {
+				return fmt.Errorf("failed to create default template: %w", createErr)
+			}
+			templateContent, err = os.ReadFile(cm.TemplatePath)
+		}
+		if err != nil {
+			return fmt.Errorf("failed to read template file %s: %w", cm.TemplatePath, err)
+		}
 	}
 
 	tmpl, err := template.New("caddy").Parse(string(templateContent))
