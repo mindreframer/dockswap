@@ -6,10 +6,11 @@ import { describe, test, beforeEach, afterEach, expect } from "bun:test";
 import {
     log, logStep, logSuccess, logWarning, logInfo, run, setupE2EEnvironment, teardownE2EEnvironment,
     colors, resetStepCounter, startCaddy, stopCaddy, createTestAppConfig,
-    validateCaddyIntegration, validateDatabaseState, validateContainerHealth, createTestTempDir, cleanupTestTempDir
+    validateCaddyIntegration, validateDatabaseState, createTestTempDir, cleanupTestTempDir
 } from './utils.js';
 
 import { DockSwap } from './dockswap.page.js';
+import { DockerTest } from './docker.page.js';
 
 // Test configuration
 const TEST_APP = "caddy-integration-test";
@@ -25,6 +26,7 @@ describe("Dockswap E2E - Complete Caddy Integration", () => {
     let baseDir;
     let env;
     let dockSwap;
+    let docker;
 
     beforeEach(async () => {
         testStartTime = Date.now();
@@ -37,6 +39,7 @@ describe("Dockswap E2E - Complete Caddy Integration", () => {
         await createTestAppConfig(baseDir, TEST_APP, BLUE_PORT, GREEN_PORT, PROXY_PORT);
 
         dockSwap = new DockSwap({ binPath: "./dockswap", env, baseDir });
+        docker = new DockerTest();
 
         log(`${colors.bold}${colors.blue}🚀 Setting up complete Caddy integration test environment${colors.reset}`);
         await setupE2EEnvironment({ pullImages: [TEST_IMAGE], cleanup: true, baseDir });
@@ -86,7 +89,7 @@ describe("Dockswap E2E - Complete Caddy Integration", () => {
 
         // 2. Verify green container is running and healthy
         logStep("Verifying green container health");
-        await validateContainerHealth(baseDir, TEST_APP, "green", GREEN_PORT);
+        await docker.validateContainerHealth(baseDir, TEST_APP, "green", GREEN_PORT);
 
         // 3. Verify database state shows green as active
         logStep("Verifying database state");
@@ -104,8 +107,8 @@ describe("Dockswap E2E - Complete Caddy Integration", () => {
 
         // 6. Verify both containers are running
         logStep("Verifying both containers are running");
-        await validateContainerHealth(baseDir, TEST_APP, "green", GREEN_PORT);
-        await validateContainerHealth(baseDir, TEST_APP, "blue", BLUE_PORT);
+        await docker.validateContainerHealth(baseDir, TEST_APP, "green", GREEN_PORT);
+        await docker.validateContainerHealth(baseDir, TEST_APP, "blue", BLUE_PORT);
 
         // 7. Verify database state still shows green as active (no switch yet)
         logStep("Verifying database state after blue deployment");
@@ -131,13 +134,10 @@ describe("Dockswap E2E - Complete Caddy Integration", () => {
 
         // 12. Final verification - both containers should still be running
         logStep("Final verification - both containers running");
-        const containers = await run(
-            `docker ps --filter "label=dockswap.managed=true" --format "{{.Names}}\t{{.Status}}"`,
-            { silent: true, env }
-        );
-        const runningContainers = containers.stdout.trim().split('\n').filter(line => line.trim());
+        const containers = await docker.getContainers();
+        const runningContainers = containers.filter(line => line);
         expect(runningContainers.length).toBe(2);
-        logSuccess(`Both containers running: ${runningContainers.map(c => c.split('\t')[0]).join(', ')}`);
+        logSuccess(`Both containers running: ${runningContainers.map(c => c.name).join(', ')}`);
 
         logSuccess("Complete blue-green deployment with Caddy integration test passed");
     }, 60000); // 60 second timeout for this test
@@ -206,7 +206,7 @@ describe("Dockswap E2E - Complete Caddy Integration", () => {
         const dbState = await validateDatabaseState(baseDir, TEST_APP, "green", TEST_IMAGE);
 
         // Container state
-        await validateContainerHealth(baseDir, TEST_APP, "green", GREEN_PORT);
+        await docker.validateContainerHealth(baseDir, TEST_APP, "green", GREEN_PORT);
 
         // Caddy state
         await validateCaddyIntegration(baseDir, TEST_APP, GREEN_PORT, PROXY_PORT);
@@ -225,8 +225,8 @@ describe("Dockswap E2E - Complete Caddy Integration", () => {
 
         // Should still be on green (no switch yet)
         const afterSecondDeploy = await validateDatabaseState(baseDir, TEST_APP, "green", TEST_IMAGE);
-        await validateContainerHealth(baseDir, TEST_APP, "green", GREEN_PORT);
-        await validateContainerHealth(baseDir, TEST_APP, "blue", BLUE_PORT);
+        await docker.validateContainerHealth(baseDir, TEST_APP, "green", GREEN_PORT);
+        await docker.validateContainerHealth(baseDir, TEST_APP, "blue", BLUE_PORT);
         await validateCaddyIntegration(baseDir, TEST_APP, GREEN_PORT, PROXY_PORT);
 
         // 5. Switch traffic
@@ -237,8 +237,8 @@ describe("Dockswap E2E - Complete Caddy Integration", () => {
         logStep("Verifying final state consistency");
 
         const finalDbState = await validateDatabaseState(baseDir, TEST_APP, "blue", TEST_IMAGE);
-        await validateContainerHealth(baseDir, TEST_APP, "green", GREEN_PORT);
-        await validateContainerHealth(baseDir, TEST_APP, "blue", BLUE_PORT);
+        await docker.validateContainerHealth(baseDir, TEST_APP, "green", GREEN_PORT);
+        await docker.validateContainerHealth(baseDir, TEST_APP, "blue", BLUE_PORT);
         await validateCaddyIntegration(baseDir, TEST_APP, BLUE_PORT, PROXY_PORT);
 
         const finalCliStatus = await dockSwap.status(TEST_APP);
@@ -270,11 +270,11 @@ describe("Dockswap E2E - Complete Caddy Integration", () => {
 
         // 4. Verify green container is running
         logStep("Verifying green container is running");
-        await validateContainerHealth(baseDir, TEST_APP, "green", GREEN_PORT);
+        await docker.validateContainerHealth(baseDir, TEST_APP, "green", GREEN_PORT);
 
         // 5. Verify blue container is running
         logStep("Verifying blue container is running");
-        await validateContainerHealth(baseDir, TEST_APP, "blue", BLUE_PORT);
+        await docker.validateContainerHealth(baseDir, TEST_APP, "blue", BLUE_PORT);
 
         // 6. Verify database state is correct (should still be green)
         logStep("Verifying database state");
