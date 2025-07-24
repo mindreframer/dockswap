@@ -1,4 +1,7 @@
 import { $ } from "bun";
+import { mkdtempSync, rmSync } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
 
 // Colors for output
 export const colors = {
@@ -143,9 +146,10 @@ export async function cleanupDockswapContainers() {
   }
 }
 
-export async function cleanupDockswapDatabase() {
+export async function cleanupDockswapDatabase(baseDir) {
   logInfo("Cleaning up dockswap database...");
-  const result = await run("rm -f dockswap-cfg/dockswap.db", { allowFailure: true, silent: true });
+  const dbPath = baseDir ? `${baseDir}/dockswap.db` : "dockswap-cfg/dockswap.db";
+  const result = await run(`rm -f ${dbPath}`, { allowFailure: true, silent: true });
   if (result.success) {
     logSuccess("Database cleaned up");
   }
@@ -183,44 +187,40 @@ export async function pullDockerImage(image) {
 }
 
 // Dockswap command wrappers
-export async function dockswapDeploy(appName, image, dockswapBin = "./dockswap") {
-  logInfo(`Deploying ${appName} with ${image}...`);
-  const result = await run(`${dockswapBin} deploy ${appName} ${image}`);
-
+export async function dockswapDeploy(baseDir, appName, image, dockswapBin = "./dockswap") {
+  logInfo(`Deploying ${baseDir} with ${appName}...`);
+  const env = { ...process.env, DOCKSWAP_CONFIG_DIR: baseDir };
+  const result = await run(`${dockswapBin} deploy ${appName} ${image}`, { env });
   if (!result.success) {
     throw new Error(`Deployment failed: ${result.stderr || result.stdout}`);
   }
-
   logSuccess(`Deployed ${appName} successfully`);
   return result;
 }
 
-export async function dockswapSwitch(appName, color, dockswapBin = "./dockswap") {
+export async function dockswapSwitch(baseDir, appName, color, dockswapBin = "./dockswap") {
   logInfo(`Switching ${appName} to ${color}...`);
-  const result = await run(`${dockswapBin} switch ${appName} ${color}`);
-
+  const env = { ...process.env, DOCKSWAP_CONFIG_DIR: baseDir };
+  const result = await run(`${dockswapBin} switch ${appName} ${color}`, { env });
   if (!result.success) {
     throw new Error(`Switch failed: ${result.stderr || result.stdout}`);
   }
-
   logSuccess(`Switched ${appName} to ${color}`);
   return result;
 }
 
-export async function dockswapStatus(appName, dockswapBin = "./dockswap") {
-  const result = await run(`${dockswapBin} status ${appName}`, { silent: true });
-
+export async function dockswapStatus(baseDir, appName, dockswapBin = "./dockswap") {
+  const env = { ...process.env, DOCKSWAP_CONFIG_DIR: baseDir };
+  const result = await run(`${dockswapBin} status ${appName}`, { silent: true, env });
   if (!result.success) {
     throw new Error(`Status check failed: ${result.stderr || result.stdout}`);
   }
-
   // Parse status output
   const lines = result.stdout.split('\n');
   const colorLine = lines.find(line => line.includes('Color:'));
   const imageLine = lines.find(line => line.includes('Image:'));
   const statusLine = lines.find(line => line.includes('Status:'));
   const updatedLine = lines.find(line => line.includes('Updated:'));
-
   return {
     activeColor: colorLine?.split('Color:')[1]?.trim(),
     image: imageLine?.split('Image:')[1]?.trim(),
@@ -289,12 +289,12 @@ export async function waitFor(condition, { timeout = 30000, interval = 1000, mes
 }
 
 // Test setup and teardown
-export async function setupE2EEnvironment({ buildDockswap = false, pullImages = [], cleanup = true } = {}) {
+export async function setupE2EEnvironment({ buildDockswap = false, pullImages = [], cleanup = true, baseDir } = {}) {
   logInfo("Setting up E2E test environment...");
 
   if (cleanup) {
     await cleanupDockswapContainers();
-    await cleanupDockswapDatabase();
+    await cleanupDockswapDatabase(baseDir);
   }
 
   // We build the binary once in the makefile before running tests
@@ -311,15 +311,31 @@ export async function setupE2EEnvironment({ buildDockswap = false, pullImages = 
   logSuccess("E2E environment setup complete");
 }
 
-export async function teardownE2EEnvironment() {
+export async function teardownE2EEnvironment(baseDir) {
   logInfo("Tearing down E2E test environment...");
   await cleanupDockswapContainers();
-  await cleanupDockswapDatabase();
+  await cleanupDockswapDatabase(baseDir);
   logSuccess("E2E environment torn down");
 }
 
+// Utility to create a unique temp dir for each test
+export function createTestTempDir(testName) {
+  const base = join(tmpdir(), `dockswap-e2e-${testName}-`);
+  // mkdtempSync returns the actual created directory path
+  const dir = mkdtempSync(base);
+  return dir;
+}
+
+export function cleanupTestTempDir(baseDir) {
+  try {
+    rmSync(baseDir, { recursive: true, force: true });
+  } catch (e) {
+    // ignore
+  }
+}
+
 // Caddy management utilities
-export async function startCaddy(configPath, adminPort = 2019) {
+export async function startCaddy(baseDir, configPath, adminPort = 2019) {
   logInfo(`Starting Caddy with config: ${configPath}`);
 
   // Kill any existing Caddy processes
@@ -407,7 +423,7 @@ export async function stopCaddy() {
   return checkResult;
 }
 
-export async function createTestAppConfig(appName, bluePort, greenPort, proxyPort = 8080) {
+export async function createTestAppConfig(baseDir, appName, bluePort, greenPort, proxyPort = 8080) {
   const config = {
     name: appName,
     description: "Test app for Caddy integration",
@@ -443,7 +459,7 @@ export async function createTestAppConfig(appName, bluePort, greenPort, proxyPor
     }
   };
 
-  const configPath = `dockswap-cfg/apps/${appName}.yaml`;
+  const configPath = `${baseDir}/apps/${appName}.yaml`;
 
   // Create proper YAML format
   const configYaml = `name: "${config.name}"
@@ -473,13 +489,13 @@ proxy:
   listen_port: ${config.proxy.listen_port}
   host: "${config.proxy.host}"`;
 
-  await run(`mkdir -p dockswap-cfg/apps`);
+  await run(`mkdir -p ${baseDir}/apps`);
   await run(`echo '${configYaml}' > ${configPath}`);
   logSuccess(`Created test app config: ${configPath}`);
   return configPath;
 }
 
-export async function validateCaddyIntegration(appName, expectedPort, proxyPort = 8080) {
+export async function validateCaddyIntegration(baseDir, appName, expectedPort, proxyPort = 8080) {
   logStep(`Validating Caddy integration for ${appName}`);
 
   // Check if Caddy is running
@@ -508,7 +524,7 @@ export async function validateCaddyIntegration(appName, expectedPort, proxyPort 
   return true;
 }
 
-export async function validateDatabaseState(appName, expectedColor, expectedImage) {
+export async function validateDatabaseState(baseDir, appName, expectedColor, expectedImage) {
   logStep(`Validating database state for ${appName}`);
 
   // Check current state
@@ -517,7 +533,7 @@ export async function validateDatabaseState(appName, expectedColor, expectedImag
     throw new Error(`Failed to get status: ${statusResult.stderr}`);
   }
 
-  const status = await dockswapStatus(appName);
+  const status = await dockswapStatus(baseDir, appName);
 
   if (status.activeColor !== expectedColor) {
     throw new Error(`Expected active color ${expectedColor}, got ${status.activeColor}`);
@@ -531,7 +547,7 @@ export async function validateDatabaseState(appName, expectedColor, expectedImag
   return status;
 }
 
-export async function validateContainerHealth(appName, color, port) {
+export async function validateContainerHealth(baseDir, appName, color, port) {
   logStep(`Validating container health for ${appName}-${color}`);
 
   // Check container is running

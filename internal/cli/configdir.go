@@ -2,6 +2,7 @@ package cli
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 )
@@ -21,6 +22,18 @@ func FindConfigDir(flags GlobalFlags, statFunc StatFunc, homeDirFunc HomeDirFunc
 	}
 	if getwdFunc == nil {
 		getwdFunc = os.Getwd
+	}
+
+	// 0. DOCKSWAP_CONFIG_DIR env var
+	if envDir := os.Getenv("DOCKSWAP_CONFIG_DIR"); envDir != "" {
+		fmt.Fprintf(os.Stderr, "[DEBUG] DOCKSWAP_CONFIG_DIR: %s\n", envDir)
+		info, err := statFunc(envDir)
+		if err == nil && info.IsDir() {
+			fmt.Fprintf(os.Stderr, "[DEBUG] statFunc(envDir) success, using: %s\n", envDir)
+			return envDir, nil
+		} else {
+			fmt.Fprintf(os.Stderr, "[DEBUG] statFunc(envDir) failed: %v\n", err)
+		}
 	}
 
 	// 1. --config arg
