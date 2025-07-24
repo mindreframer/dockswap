@@ -39,7 +39,7 @@ Caddy Integration Questions
 
 2. 
     - generate configs dynamically
-    - dockswap-cfg/caddy/config.json looks nice. we will use dockswap-cfg/caddy/template.json for generation. 
+    - dockswap-cfg/caddy/caddy.json looks nice. we will use dockswap-cfg/caddy/template.json for generation. 
 
 3. 
     - update config + reload. Should be ok for start

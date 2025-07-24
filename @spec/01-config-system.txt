@@ -4,7 +4,7 @@ File structure in the config folder:
 /etc/dockswap/
 ├── dockswap.sqlite3
 ├── caddy/template.json
-├── caddy/config.json (generated)
+├── caddy/caddy.json (generated)
 ├── apps/*.yaml (static config)
 └── state/*.yaml (runtime state)
 ```

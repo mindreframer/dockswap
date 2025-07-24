@@ -13,7 +13,7 @@ import (
 )
 
 func TestNew(t *testing.T) {
-	configPath := "/test/config.json"
+	configPath := "/tes/caddy.json"
 	templatePath := "/test/template.json"
 
 	cm := New(configPath, templatePath)
@@ -30,7 +30,7 @@ func TestNew(t *testing.T) {
 }
 
 func TestSetAdminURL(t *testing.T) {
-	cm := New("/test/config.json", "/test/template.json")
+	cm := New("/tes/caddy.json", "/test/template.json")
 	newURL := "http://localhost:3000"
 
 	cm.SetAdminURL(newURL)
@@ -47,7 +47,7 @@ func TestValidateCaddyRunning(t *testing.T) {
 		}))
 		defer server.Close()
 
-		cm := New("/test/config.json", "/test/template.json")
+		cm := New("/tes/caddy.json", "/test/template.json")
 		cm.SetAdminURL(server.URL)
 
 		err := cm.ValidateCaddyRunning()
@@ -57,7 +57,7 @@ func TestValidateCaddyRunning(t *testing.T) {
 	})
 
 	t.Run("caddy not running", func(t *testing.T) {
-		cm := New("/test/config.json", "/test/template.json")
+		cm := New("/tes/caddy.json", "/test/template.json")
 		cm.SetAdminURL("http://localhost:99999")
 
 		err := cm.ValidateCaddyRunning()
@@ -72,7 +72,7 @@ func TestValidateCaddyRunning(t *testing.T) {
 		}))
 		defer server.Close()
 
-		cm := New("/test/config.json", "/test/template.json")
+		cm := New("/tes/caddy.json", "/test/template.json")
 		cm.SetAdminURL(server.URL)
 
 		err := cm.ValidateCaddyRunning()
@@ -84,7 +84,7 @@ func TestValidateCaddyRunning(t *testing.T) {
 
 func TestGenerateConfig(t *testing.T) {
 	tempDir := t.TempDir()
-	configPath := filepath.Join(tempDir, "config.json")
+	configPath := filepath.Join(tempDir, "caddy.json")
 	templatePath := filepath.Join(tempDir, "template.json")
 
 	template := `{
@@ -194,7 +194,7 @@ func TestGenerateConfig(t *testing.T) {
 
 func TestReloadCaddy(t *testing.T) {
 	tempDir := t.TempDir()
-	configPath := filepath.Join(tempDir, "config.json")
+	configPath := filepath.Join(tempDir, "caddy.json")
 
 	validConfig := `{"apps": {"http": {"servers": {}}}}`
 	err := os.WriteFile(configPath, []byte(validConfig), 0644)
@@ -237,7 +237,7 @@ func TestReloadCaddy(t *testing.T) {
 	})
 
 	t.Run("missing config file", func(t *testing.T) {
-		cm := New("/nonexistent/config.json", "/test/template.json")
+		cm := New("/nonexistent/caddy.json", "/test/template.json")
 		err := cm.ReloadCaddy()
 		if err == nil {
 			t.Errorf("ReloadCaddy() should fail with missing config file")
@@ -246,7 +246,7 @@ func TestReloadCaddy(t *testing.T) {
 }
 
 func TestBuildTemplateData(t *testing.T) {
-	cm := New("/test/config.json", "/test/template.json")
+	cm := New("/tes/caddy.json", "/test/template.json")
 
 	configs := map[string]*config.AppConfig{
 		"app1": {
@@ -330,7 +330,7 @@ func TestBuildTemplateData(t *testing.T) {
 }
 
 func TestGetActivePort(t *testing.T) {
-	cm := New("/test/config.json", "/test/template.json")
+	cm := New("/tes/caddy.json", "/test/template.json")
 
 	appConfig := &config.AppConfig{
 		Ports: config.Ports{
@@ -390,14 +390,14 @@ func TestHasTemplate(t *testing.T) {
 	}
 
 	t.Run("template exists", func(t *testing.T) {
-		cm := New("/test/config.json", existingTemplate)
+		cm := New("/tes/caddy.json", existingTemplate)
 		if !cm.HasTemplate() {
 			t.Errorf("HasTemplate() should return true for existing template")
 		}
 	})
 
 	t.Run("template does not exist", func(t *testing.T) {
-		cm := New("/test/config.json", nonExistentTemplate)
+		cm := New("/tes/caddy.json", nonExistentTemplate)
 		if cm.HasTemplate() {
 			t.Errorf("HasTemplate() should return false for nonexistent template")
 		}
@@ -407,7 +407,7 @@ func TestHasTemplate(t *testing.T) {
 func TestCreateDefaultTemplate(t *testing.T) {
 	tempDir := t.TempDir()
 	templatePath := filepath.Join(tempDir, "subdir", "template.json")
-	configPath := filepath.Join(tempDir, "config.json")
+	configPath := filepath.Join(tempDir, "caddy.json")
 
 	cm := New(configPath, templatePath)
 

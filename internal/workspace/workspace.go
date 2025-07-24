@@ -368,7 +368,7 @@ func fileExists(path string) (bool, error) {
 }
 
 func (w *Workspace) initializeCaddy() error {
-	configPath := filepath.Join(w.CaddyDir, "config.json")
+	configPath := filepath.Join(w.CaddyDir, "caddy.json")
 	templatePath := filepath.Join(w.CaddyDir, "template.json")
 
 	w.CaddyMgr = caddy.New(configPath, templatePath)

@@ -43,7 +43,7 @@ func (c *CLI) LoadConfigs(configDir string) error {
 
 	// Initialize Caddy manager if we have configs
 	if len(configs) > 0 {
-		caddyConfigPath := configDir + "/caddy/config.json"
+		caddyConfigPath := configDir + "/caddy/caddy.json"
 		caddyTemplatePath := configDir + "/caddy/template.json"
 		c.caddyMgr = caddy.New(caddyConfigPath, caddyTemplatePath)
 	}
