@@ -20,14 +20,15 @@ type AppConfig struct {
 }
 
 type Docker struct {
-	RestartPolicy string            `yaml:"restart_policy"`
-	PullPolicy    string            `yaml:"pull_policy"`
-	MemoryLimit   string            `yaml:"memory_limit"`
-	CPULimit      string            `yaml:"cpu_limit"`
-	Environment   map[string]string `yaml:"environment"`
-	Volumes       []string          `yaml:"volumes"`
-	ExposePort    int               `yaml:"expose_port"`
-	Network       string            `yaml:"network"`
+	RestartPolicy        string                       `yaml:"restart_policy"`
+	PullPolicy          string                       `yaml:"pull_policy"`
+	MemoryLimit         string                       `yaml:"memory_limit"`
+	CPULimit            string                       `yaml:"cpu_limit"`
+	Environment         map[string]string            `yaml:"environment"`
+	EnvironmentOverrides map[string]map[string]string `yaml:"environment_overrides"`
+	Volumes             []string                     `yaml:"volumes"`
+	ExposePort          int                          `yaml:"expose_port"`
+	Network             string                       `yaml:"network"`
 }
 
 type Ports struct {
@@ -102,6 +103,25 @@ func LoadAllConfigs(configDir string) (map[string]*AppConfig, error) {
 	return configs, nil
 }
 
+// GetEnvironmentForColor merges base environment with color-specific overrides
+func (d *Docker) GetEnvironmentForColor(color string) map[string]string {
+	result := make(map[string]string)
+	
+	// Copy base environment
+	for k, v := range d.Environment {
+		result[k] = v
+	}
+	
+	// Apply color-specific overrides
+	if colorOverrides, exists := d.EnvironmentOverrides[color]; exists {
+		for k, v := range colorOverrides {
+			result[k] = v
+		}
+	}
+	
+	return result
+}
+
 func validateConfig(config *AppConfig) error {
 	if config.Name == "" {
 		return fmt.Errorf("app name is required")
@@ -129,6 +149,13 @@ func validateConfig(config *AppConfig) error {
 
 	if config.HealthCheck.ExpectedStatus < 100 || config.HealthCheck.ExpectedStatus >= 600 {
 		return fmt.Errorf("health_check.expected_status must be a valid HTTP status code")
+	}
+
+	// Validate environment overrides
+	for color := range config.Docker.EnvironmentOverrides {
+		if color != "blue" && color != "green" {
+			return fmt.Errorf("environment_overrides: only 'blue' and 'green' colors are supported, got '%s'", color)
+		}
 	}
 
 	return nil

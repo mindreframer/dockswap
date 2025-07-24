@@ -194,6 +194,343 @@ func TestValidateConfig(t *testing.T) {
 	}
 }
 
+func TestGetEnvironmentForColor(t *testing.T) {
+	docker := Docker{
+		Environment: map[string]string{
+			"DATABASE_URL": "postgres://localhost/test",
+			"LOG_LEVEL":    "info",
+			"PORT":         "4000",
+		},
+		EnvironmentOverrides: map[string]map[string]string{
+			"blue": {
+				"PORT":      "8081",
+				"LOG_LEVEL": "debug",
+				"NEW_VAR":   "blue_value",
+			},
+			"green": {
+				"PORT":    "8082",
+				"NEW_VAR": "green_value",
+			},
+		},
+	}
+
+	tests := []struct {
+		name     string
+		color    string
+		expected map[string]string
+	}{
+		{
+			name:  "blue environment with overrides",
+			color: "blue",
+			expected: map[string]string{
+				"DATABASE_URL": "postgres://localhost/test",
+				"LOG_LEVEL":    "debug", // overridden
+				"PORT":         "8081",  // overridden
+				"NEW_VAR":      "blue_value", // added
+			},
+		},
+		{
+			name:  "green environment with overrides",
+			color: "green",
+			expected: map[string]string{
+				"DATABASE_URL": "postgres://localhost/test",
+				"LOG_LEVEL":    "info",        // not overridden
+				"PORT":         "8082",        // overridden
+				"NEW_VAR":      "green_value", // added
+			},
+		},
+		{
+			name:  "non-existent color returns base environment",
+			color: "purple",
+			expected: map[string]string{
+				"DATABASE_URL": "postgres://localhost/test",
+				"LOG_LEVEL":    "info",
+				"PORT":         "4000",
+			},
+		},
+		{
+			name:  "empty color returns base environment",
+			color: "",
+			expected: map[string]string{
+				"DATABASE_URL": "postgres://localhost/test",
+				"LOG_LEVEL":    "info",
+				"PORT":         "4000",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := docker.GetEnvironmentForColor(tt.color)
+			
+			if len(result) != len(tt.expected) {
+				t.Errorf("GetEnvironmentForColor() returned %d variables, expected %d", len(result), len(tt.expected))
+			}
+			
+			for key, expectedValue := range tt.expected {
+				if actualValue, exists := result[key]; !exists {
+					t.Errorf("GetEnvironmentForColor() missing key %s", key)
+				} else if actualValue != expectedValue {
+					t.Errorf("GetEnvironmentForColor() key %s = %v, expected %v", key, actualValue, expectedValue)
+				}
+			}
+		})
+	}
+}
+
+func TestGetEnvironmentForColorEmptyOverrides(t *testing.T) {
+	docker := Docker{
+		Environment: map[string]string{
+			"DATABASE_URL": "postgres://localhost/test",
+			"PORT":         "4000",
+		},
+		EnvironmentOverrides: map[string]map[string]string{
+			"blue":  {}, // empty override
+			"green": {}, // empty override
+		},
+	}
+
+	result := docker.GetEnvironmentForColor("blue")
+	expected := map[string]string{
+		"DATABASE_URL": "postgres://localhost/test",
+		"PORT":         "4000",
+	}
+
+	if len(result) != len(expected) {
+		t.Errorf("GetEnvironmentForColor() with empty overrides returned %d variables, expected %d", len(result), len(expected))
+	}
+
+	for key, expectedValue := range expected {
+		if actualValue := result[key]; actualValue != expectedValue {
+			t.Errorf("GetEnvironmentForColor() key %s = %v, expected %v", key, actualValue, expectedValue)
+		}
+	}
+}
+
+func TestValidateConfigEnvironmentOverrides(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  AppConfig
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "valid environment overrides",
+			config: AppConfig{
+				Name: "test-app",
+				Docker: Docker{
+					ExposePort: 8080,
+					EnvironmentOverrides: map[string]map[string]string{
+						"blue": {
+							"PORT": "8081",
+						},
+						"green": {
+							"PORT": "8082",
+						},
+					},
+				},
+				Ports: Ports{
+					Blue:  8081,
+					Green: 8082,
+				},
+				HealthCheck: HealthCheck{
+					Retries:          3,
+					SuccessThreshold: 2,
+					ExpectedStatus:   200,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid color in environment overrides",
+			config: AppConfig{
+				Name: "test-app",
+				Docker: Docker{
+					ExposePort: 8080,
+					EnvironmentOverrides: map[string]map[string]string{
+						"blue": {
+							"PORT": "8081",
+						},
+						"purple": { // invalid color
+							"PORT": "8083",
+						},
+					},
+				},
+				Ports: Ports{
+					Blue:  8081,
+					Green: 8082,
+				},
+				HealthCheck: HealthCheck{
+					Retries:          3,
+					SuccessThreshold: 2,
+					ExpectedStatus:   200,
+				},
+			},
+			wantErr: true,
+			errMsg:  "environment_overrides: only 'blue' and 'green' colors are supported, got 'purple'",
+		},
+		{
+			name: "empty environment overrides",
+			config: AppConfig{
+				Name: "test-app",
+				Docker: Docker{
+					ExposePort:           8080,
+					EnvironmentOverrides: map[string]map[string]string{},
+				},
+				Ports: Ports{
+					Blue:  8081,
+					Green: 8082,
+				},
+				HealthCheck: HealthCheck{
+					Retries:          3,
+					SuccessThreshold: 2,
+					ExpectedStatus:   200,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "nil environment overrides",
+			config: AppConfig{
+				Name: "test-app",
+				Docker: Docker{
+					ExposePort:           8080,
+					EnvironmentOverrides: nil,
+				},
+				Ports: Ports{
+					Blue:  8081,
+					Green: 8082,
+				},
+				HealthCheck: HealthCheck{
+					Retries:          3,
+					SuccessThreshold: 2,
+					ExpectedStatus:   200,
+				},
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateConfig(&tt.config)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("validateConfig() expected error but got none")
+					return
+				}
+				if err.Error() != tt.errMsg {
+					t.Errorf("validateConfig() error = %v, want %v", err.Error(), tt.errMsg)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("validateConfig() unexpected error = %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestLoadAppConfigWithEnvironmentOverrides(t *testing.T) {
+	tempDir := t.TempDir()
+
+	yamlWithOverrides := `name: test-app
+description: "Test application with environment overrides"
+docker:
+  restart_policy: "unless-stopped"
+  memory_limit: "512m"
+  cpu_limit: "0.5"
+  environment:
+    DATABASE_URL: "postgres://localhost/test"
+    LOG_LEVEL: "info"
+    PORT: "4000"
+  environment_overrides:
+    blue:
+      PORT: "8081"
+      LOG_LEVEL: "debug"
+      BLUE_SPECIFIC: "blue_value"
+    green:
+      PORT: "8082"
+      GREEN_SPECIFIC: "green_value"
+  expose_port: 8080
+ports:
+  blue: 8081
+  green: 8082
+health_check:
+  endpoint: "/health"
+  method: "GET"
+  timeout: "5s"
+  interval: "2s"
+  retries: 3
+  success_threshold: 2
+  expected_status: 200
+deployment:
+  startup_delay: "10s"
+  drain_timeout: "30s"
+  stop_timeout: "15s"
+  auto_rollback: true
+proxy:
+  listen_port: 80`
+
+	configFile := filepath.Join(tempDir, "test-overrides.yaml")
+	err := os.WriteFile(configFile, []byte(yamlWithOverrides), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write test config file: %v", err)
+	}
+
+	config, err := LoadAppConfig(configFile)
+	if err != nil {
+		t.Fatalf("LoadAppConfig() unexpected error = %v", err)
+	}
+
+	if config == nil {
+		t.Fatal("LoadAppConfig() returned nil config")
+	}
+
+	// Test base environment
+	expectedBaseEnv := map[string]string{
+		"DATABASE_URL": "postgres://localhost/test",
+		"LOG_LEVEL":    "info",
+		"PORT":         "4000",
+	}
+
+	for key, expected := range expectedBaseEnv {
+		if actual := config.Docker.Environment[key]; actual != expected {
+			t.Errorf("Base environment %s = %v, expected %v", key, actual, expected)
+		}
+	}
+
+	// Test blue environment
+	blueEnv := config.Docker.GetEnvironmentForColor("blue")
+	expectedBlueEnv := map[string]string{
+		"DATABASE_URL":   "postgres://localhost/test",
+		"LOG_LEVEL":      "debug", // overridden
+		"PORT":           "8081",  // overridden
+		"BLUE_SPECIFIC":  "blue_value", // added
+	}
+
+	for key, expected := range expectedBlueEnv {
+		if actual := blueEnv[key]; actual != expected {
+			t.Errorf("Blue environment %s = %v, expected %v", key, actual, expected)
+		}
+	}
+
+	// Test green environment
+	greenEnv := config.Docker.GetEnvironmentForColor("green")
+	expectedGreenEnv := map[string]string{
+		"DATABASE_URL":    "postgres://localhost/test",
+		"LOG_LEVEL":       "info", // not overridden
+		"PORT":            "8082", // overridden
+		"GREEN_SPECIFIC":  "green_value", // added
+	}
+
+	for key, expected := range expectedGreenEnv {
+		if actual := greenEnv[key]; actual != expected {
+			t.Errorf("Green environment %s = %v, expected %v", key, actual, expected)
+		}
+	}
+}
+
 func TestLoadAppConfig(t *testing.T) {
 	tempDir := t.TempDir()
 

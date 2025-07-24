@@ -32,7 +32,7 @@ func (dm *DockerManager) CreateContainer(ctx context.Context, appName, color, im
 	// Build container configuration
 	containerConfig := &container.Config{
 		Image: image,
-		Env:   buildEnvironmentVars(appConfig.Docker.Environment),
+		Env:   buildEnvironmentVars(appConfig.Docker.GetEnvironmentForColor(color)),
 		Labels: map[string]string{
 			"dockswap.app":     appName,
 			"dockswap.color":   color,
@@ -399,7 +399,7 @@ func (dm *DockerManager) GenerateDockerCommand(ctx context.Context, appName, col
 	parts = append(parts, fmt.Sprintf("-p %d:%d", hostPort, appConfig.Docker.ExposePort))
 
 	// Environment variables
-	for key, value := range appConfig.Docker.Environment {
+	for key, value := range appConfig.Docker.GetEnvironmentForColor(color) {
 		parts = append(parts, fmt.Sprintf("-e %s=%s", key, value))
 	}
 
