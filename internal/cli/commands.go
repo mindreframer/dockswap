@@ -545,6 +545,91 @@ func (c *CLI) handleCaddyConfigShow(args []string) error {
 	return nil
 }
 
+func (c *CLI) handleDbgCmd(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("dbg-cmd requires <app-name> argument")
+	}
+
+	appName := args[0]
+	color := ""
+
+	// Parse optional --color flag
+	for i := 1; i < len(args); i++ {
+		if args[i] == "--color" && i+1 < len(args) {
+			color = args[i+1]
+			i++
+		} else if strings.HasPrefix(args[i], "--color=") {
+			color = strings.TrimPrefix(args[i], "--color=")
+		}
+	}
+
+	// Validate color if provided
+	if color != "" && color != "blue" && color != "green" {
+		return fmt.Errorf("color must be 'blue' or 'green', got: %s", color)
+	}
+
+	// Check if app config exists
+	appConfig, exists := c.configs[appName]
+	if !exists {
+		return fmt.Errorf("no configuration found for app %s", appName)
+	}
+
+	// Create Docker client
+	dockerClient, err := docker.NewDockerClient()
+	if err != nil {
+		return fmt.Errorf("failed to create Docker client: %w", err)
+	}
+	defer dockerClient.Close()
+
+	dockerManager := docker.NewDockerManager(dockerClient)
+	ctx := context.Background()
+
+	// If no color specified, try to determine active color from state
+	if color == "" {
+		cs, err := state.GetCurrentState(c.DB, appName)
+		if err != nil || cs == nil {
+			return fmt.Errorf("no active deployment found for %s. Use --color to specify blue or green", appName)
+		}
+		color = cs.ActiveColor
+	}
+
+	// Check if container exists
+	exists, err = dockerManager.ContainerExists(ctx, appName, color)
+	if err != nil {
+		return fmt.Errorf("failed to check container existence: %w", err)
+	}
+	if !exists {
+		return fmt.Errorf("no %s container found for %s", color, appName)
+	}
+
+	// Get container info
+	containerInfo, err := dockerManager.GetContainerInfo(ctx, appName, color)
+	if err != nil {
+		return fmt.Errorf("failed to get container info: %w", err)
+	}
+
+	// Generate Docker command
+	dockerCommand, err := dockerManager.GenerateDockerCommand(ctx, appName, color, appConfig)
+	if err != nil {
+		return fmt.Errorf("failed to generate docker command: %w", err)
+	}
+
+	// Display output
+	fmt.Printf("Debug Command for app: %s\n\n", appName)
+
+	fmt.Printf("Container (%s):\n", color)
+	fmt.Printf("  Container ID: %s\n", containerInfo.ID[:12])
+	fmt.Printf("  Image: %s\n", containerInfo.Image)
+	fmt.Printf("  Status: %s\n", containerInfo.Status)
+	fmt.Printf("  Health: %s\n", containerInfo.Health)
+	fmt.Printf("  Created: %s\n", containerInfo.Created.Format("2006-01-02 15:04:05"))
+
+	fmt.Printf("\nEquivalent Docker Command:\n")
+	fmt.Println(dockerCommand)
+
+	return nil
+}
+
 func (c *CLI) generateCaddyConfig() error {
 	if c.caddyMgr == nil {
 		return fmt.Errorf("caddy manager not initialized")

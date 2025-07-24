@@ -122,6 +122,8 @@ func (c *CLI) Run(args []string) error {
 		return c.handleConfig(commandArgs)
 	case "caddy":
 		return c.handleCaddy(commandArgs)
+	case "dbg-cmd":
+		return c.handleDbgCmd(commandArgs)
 	case "version":
 		return c.handleVersion(commandArgs)
 	case "help", "-h", "--help":
@@ -150,6 +152,7 @@ Commands:
   caddy reload                    Reload Caddy configuration
   caddy config create             Create default Caddy template
   caddy config show               Show Caddy configuration paths
+  dbg-cmd <app-name> [--color]    Show equivalent docker run command for debugging
   version                         Show version information
   help                           Show this help message
 
@@ -164,5 +167,7 @@ Examples:
   dockswap logs myapp --follow
   dockswap caddy status           # Check Caddy proxy status
   dockswap caddy reload           # Reload Caddy configuration
+  dockswap dbg-cmd myapp          # Show docker command for active container
+  dockswap dbg-cmd myapp --color blue  # Show docker command for blue container
 `)
 }

@@ -353,3 +353,68 @@ func parseCreatedTime(created string) time.Time {
 	// If parsing fails, return zero time
 	return time.Time{}
 }
+
+// GenerateDockerCommand generates the equivalent docker run command for a container
+func (dm *DockerManager) GenerateDockerCommand(ctx context.Context, appName, color string, appConfig *config.AppConfig) (string, error) {
+	containerName := fmt.Sprintf("%s-%s", appName, color)
+
+	// Get container info to find the actual image
+	containerInfo, err := dm.GetContainerInfo(ctx, appName, color)
+	if err != nil {
+		return "", fmt.Errorf("failed to get container info: %w", err)
+	}
+
+	var parts []string
+	parts = append(parts, "docker run -d")
+
+	// Container name
+	parts = append(parts, fmt.Sprintf("--name %s", containerName))
+
+	// Labels
+	parts = append(parts, fmt.Sprintf("--label dockswap.app=%s", appName))
+	parts = append(parts, fmt.Sprintf("--label dockswap.color=%s", color))
+	parts = append(parts, "--label dockswap.managed=true")
+
+	// Restart policy
+	if appConfig.Docker.RestartPolicy != "" {
+		parts = append(parts, fmt.Sprintf("--restart %s", appConfig.Docker.RestartPolicy))
+	}
+
+	// Resource limits
+	if appConfig.Docker.MemoryLimit != "" {
+		parts = append(parts, fmt.Sprintf("--memory %s", appConfig.Docker.MemoryLimit))
+	}
+
+	if appConfig.Docker.CPULimit != "" {
+		parts = append(parts, fmt.Sprintf("--cpus %s", appConfig.Docker.CPULimit))
+	}
+
+	// Port mappings
+	var hostPort int
+	if color == "blue" {
+		hostPort = appConfig.Ports.Blue
+	} else {
+		hostPort = appConfig.Ports.Green
+	}
+	parts = append(parts, fmt.Sprintf("-p %d:%d", hostPort, appConfig.Docker.ExposePort))
+
+	// Environment variables
+	for key, value := range appConfig.Docker.Environment {
+		parts = append(parts, fmt.Sprintf("-e %s=%s", key, value))
+	}
+
+	// Volume mounts
+	for _, volume := range appConfig.Docker.Volumes {
+		parts = append(parts, fmt.Sprintf("-v %s", volume))
+	}
+
+	// Network
+	if appConfig.Docker.Network != "" {
+		parts = append(parts, fmt.Sprintf("--network %s", appConfig.Docker.Network))
+	}
+
+	// Image (use the actual image from running container)
+	parts = append(parts, containerInfo.Image)
+
+	return strings.Join(parts, " \\\n  "), nil
+}
