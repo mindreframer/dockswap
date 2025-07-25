@@ -427,7 +427,7 @@ func (c *CLI) handleVersion(args []string) error {
 		c.logger.Info("commit: %s", commit)
 		c.logger.Info("built: %s", date)
 	} else {
-		c.logger.Info("%s", Version)
+		fmt.Println(Version)
 	}
 
 	return nil
