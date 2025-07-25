@@ -10,7 +10,7 @@ import (
 	"dockswap/internal/config"
 	"dockswap/internal/state"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
 type Workspace struct {
@@ -222,7 +222,7 @@ func (w *Workspace) createDirectoryStructure() error {
 }
 
 func (w *Workspace) initializeDatabase() error {
-	db, err := sql.Open("sqlite3", w.DBPath)
+	db, err := sql.Open("sqlite", w.DBPath)
 	if err != nil {
 		return fmt.Errorf("failed to open database connection: %w", err)
 	}
@@ -236,7 +236,7 @@ func (w *Workspace) initializeDatabase() error {
 }
 
 func (w *Workspace) openDatabase() error {
-	db, err := sql.Open("sqlite3", w.DBPath)
+	db, err := sql.Open("sqlite", w.DBPath)
 	if err != nil {
 		return fmt.Errorf("failed to open database connection: %w", err)
 	}

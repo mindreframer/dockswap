@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
 const initialSchemaVersion int64 = 202507101010
@@ -83,7 +83,7 @@ var migrations = []Migration{
 
 // OpenAndMigrate opens the SQLite DB at path and runs migrations as needed.
 func OpenAndMigrate(path string) (*sql.DB, error) {
-	db, err := sql.Open("sqlite3", path)
+	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open sqlite db: %w", err)
 	}
