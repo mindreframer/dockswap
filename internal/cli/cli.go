@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"dockswap/internal/caddy"
 	"dockswap/internal/config"
+	"dockswap/internal/logger"
 	"fmt"
 	"strconv"
 	"strings"
@@ -23,14 +24,16 @@ type GlobalFlags struct {
 type CLI struct {
 	flags    GlobalFlags
 	DB       *sql.DB // Add DB handle for inspection commands
+	logger   logger.Logger
 	configs  map[string]*config.AppConfig
 	caddyMgr *caddy.CaddyManager
 }
 
-// New creates a CLI with a DB handle.
-func New(db *sql.DB) *CLI {
+// New creates a CLI with a DB handle and logger.
+func New(db *sql.DB, log logger.Logger) *CLI {
 	return &CLI{
 		DB:       db,
+		logger:   log,
 		configs:  make(map[string]*config.AppConfig),
 		caddyMgr: nil, // Will be initialized when configs are loaded
 	}

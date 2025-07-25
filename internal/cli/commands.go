@@ -26,8 +26,8 @@ func (c *CLI) handleStatus(args []string) error {
 		if err != nil {
 			return fmt.Errorf("failed to get current state: %w", err)
 		}
-		fmt.Printf("Status for app: %s\n", appName)
-		fmt.Printf("  Color: %s\n  Image: %s\n  Status: %s\n  Updated: %s\n",
+		c.logger.Info("Status for app: %s", appName)
+		c.logger.Info("  Color: %s\n  Image: %s\n  Status: %s\n  Updated: %s",
 			cs.ActiveColor, cs.Image, cs.Status, cs.UpdatedAt.Format("2006-01-02 15:04:05"))
 	} else {
 		// Show all apps
@@ -35,9 +35,9 @@ func (c *CLI) handleStatus(args []string) error {
 		if err != nil {
 			return fmt.Errorf("failed to get all current states: %w", err)
 		}
-		fmt.Println("Application Status:")
+		c.logger.Info("Application Status:")
 		for _, cs := range all {
-			fmt.Printf("  %s: color=%s, image=%s, status=%s, updated=%s\n",
+			c.logger.Info("  %s: color=%s, image=%s, status=%s, updated=%s",
 				cs.AppName, cs.ActiveColor, cs.Image, cs.Status, cs.UpdatedAt.Format("2006-01-02 15:04:05"))
 		}
 	}
@@ -58,7 +58,7 @@ func (c *CLI) handleDeploy(args []string) error {
 		return fmt.Errorf("no configuration found for app %s", appName)
 	}
 
-	fmt.Printf("Deploying %s with image %s...\n", appName, image)
+	c.logger.Info("Deploying %s with image %s...", appName, image)
 
 	// Create Docker client
 	dockerClient, err := docker.NewDockerClient()
@@ -88,54 +88,54 @@ func (c *CLI) handleDeploy(args []string) error {
 		targetColor = "blue"
 	}
 
-	fmt.Printf("Current active: %s, deploying to: %s\n", activeColor, targetColor)
+	c.logger.Info("Current active: %s, deploying to: %s", activeColor, targetColor)
 
 	// Create action provider
 	actionProvider := docker.NewDockerActionProvider(dockerManager, nil, c.configs)
 	actionProvider.SetContext(ctx)
 
 	// Start container
-	fmt.Println("✓ Starting container...")
+	c.logger.Info("✓ Starting container...")
 	if err := actionProvider.StartContainer(appName, targetColor, image); err != nil {
 		return fmt.Errorf("failed to start container: %w", err)
 	}
 
 	// Wait for health check
-	fmt.Println("✓ Waiting for health check...")
+	c.logger.Info("✓ Waiting for health check...")
 	timeout := time.Duration(appConfig.HealthCheck.Retries) * appConfig.HealthCheck.Interval * 2
 	if err := dockerManager.WaitForHealthy(ctx, appName, targetColor, appConfig, timeout); err != nil {
 		return fmt.Errorf("health check failed: %w", err)
 	}
 
-	fmt.Println("✓ Container healthy and ready")
+	c.logger.Info("✓ Container healthy and ready")
 
 	// Update Caddy configuration if this is the first deployment
 	if cs == nil && c.caddyMgr != nil {
-		fmt.Println("✓ Updating Caddy configuration for initial deployment...")
+		c.logger.Info("✓ Updating Caddy configuration for initial deployment...")
 		if err := c.generateCaddyConfig(); err != nil {
-			fmt.Printf("Warning: failed to generate Caddy config: %v\n", err)
+			c.logger.Error("Warning: failed to generate Caddy config: %v", err)
 		} else {
 			if err := c.caddyMgr.ReloadCaddy(); err != nil {
-				fmt.Printf("Warning: failed to reload Caddy: %v\n", err)
+				c.logger.Error("Warning: failed to reload Caddy: %v", err)
 			} else {
-				fmt.Println("✓ Caddy configuration updated")
+				c.logger.Info("✓ Caddy configuration updated")
 			}
 		}
 	}
 
 	if cs == nil {
 		// First deployment
-		fmt.Printf("✓ Initial deployment complete - traffic active on %s\n", targetColor)
+		c.logger.Info("✓ Initial deployment complete - traffic active on %s", targetColor)
 	} else {
 		// Subsequent deployment
-		fmt.Printf("✓ Deployment complete - traffic still on %s\n", activeColor)
-		fmt.Printf("Run 'dockswap switch %s %s' to switch traffic\n", appName, targetColor)
+		c.logger.Info("✓ Deployment complete - traffic still on %s", activeColor)
+		c.logger.Info("Run 'dockswap switch %s %s' to switch traffic", appName, targetColor)
 	}
 
 	// Update database state
 	depID, err := state.InsertDeployment(c.DB, appName, 1, image, "ready", targetColor, nil)
 	if err != nil {
-		fmt.Printf("Warning: failed to update database: %v\n", err)
+		c.logger.Error("Warning: failed to update database: %v", err)
 	} else {
 		// For first deployment, make the deployed color active
 		// For subsequent deployments, keep current active until manual switch
@@ -184,10 +184,10 @@ func (c *CLI) handleHistory(args []string) error {
 		return fmt.Errorf("failed to get deployment history: %w", err)
 	}
 	if len(hist) == 0 {
-		fmt.Printf("No deployments found for %s\n", appName)
+		c.logger.Info("No deployments found for %s", appName)
 		return nil
 	}
-	fmt.Printf("Deployment history for %s (last %d):\n", appName, limit)
+	c.logger.Info("Deployment history for %s (last %d):", appName, limit)
 	for i, d := range hist {
 		if i >= limit {
 			break
@@ -196,7 +196,7 @@ func (c *CLI) handleHistory(args []string) error {
 		if d.EndedAt.Valid {
 			ended = d.EndedAt.Time.Format("2006-01-02 15:04:05")
 		}
-		fmt.Printf("  %s  %s  -> %s  (%s)  ended: %s\n",
+		c.logger.Info("  %s  %s  -> %s  (%s)  ended: %s",
 			d.StartedAt.Format("2006-01-02 15:04:05"), d.Image, d.ActiveColor, d.Status, ended)
 	}
 	return nil
@@ -219,16 +219,16 @@ func (c *CLI) handleEvents(args []string) error {
 		return fmt.Errorf("failed to get events: %w", err)
 	}
 	if len(events) == 0 {
-		fmt.Printf("No events found for deployment %d\n", depID)
+		c.logger.Info("No events found for deployment %d", depID)
 		return nil
 	}
-	fmt.Printf("Events for deployment %d:\n", depID)
+	c.logger.Info("Events for deployment %d:", depID)
 	for _, e := range events {
 		errStr := ""
 		if e.Error.Valid {
 			errStr = e.Error.String
 		}
-		fmt.Printf("  %s  %s  payload: %s  error: %s\n",
+		c.logger.Info("  %s  %s  payload: %s  error: %s",
 			e.CreatedAt.Format("2006-01-02 15:04:05"), e.EventType, e.Payload, errStr)
 	}
 	return nil
@@ -241,10 +241,10 @@ func (c *CLI) handleHealth(args []string) error {
 
 	appName := args[0]
 
-	fmt.Printf("Health check for %s:\n", appName)
-	fmt.Println("  Blue:  ✓ healthy (2/2 containers)")
-	fmt.Println("  Green: ✓ healthy (2/2 containers)")
-	fmt.Println("  Load Balancer: ✓ healthy")
+	c.logger.Info("Health check for %s:", appName)
+	c.logger.Info("  Blue:  ✓ healthy (2/2 containers)")
+	c.logger.Info("  Green: ✓ healthy (2/2 containers)")
+	c.logger.Info("  Load Balancer: ✓ healthy")
 
 	return nil
 }
@@ -295,12 +295,12 @@ func (c *CLI) handleSwitch(args []string) error {
 		return fmt.Errorf("%s container for %s is not healthy", color, appName)
 	}
 
-	fmt.Printf("Switching %s to %s deployment...\n", appName, color)
+	c.logger.Info("Switching %s to %s deployment...", appName, color)
 
 	// Get current state
 	cs, err := state.GetCurrentState(c.DB, appName)
 	if err != nil {
-		fmt.Printf("Warning: could not get current state: %v\n", err)
+		c.logger.Error("Warning: could not get current state: %v", err)
 	}
 
 	oldColor := "blue"
@@ -309,12 +309,12 @@ func (c *CLI) handleSwitch(args []string) error {
 	}
 
 	if oldColor == color {
-		fmt.Printf("Traffic is already on %s deployment\n", color)
+		c.logger.Info("Traffic is already on %s deployment", color)
 		return nil
 	}
 
 	// Update database state to switch active color
-	fmt.Println("✓ Updating traffic routing...")
+	c.logger.Info("✓ Updating traffic routing...")
 	// Use the image from the current state (cs) if available
 	image := ""
 	if cs != nil {
@@ -327,35 +327,35 @@ func (c *CLI) handleSwitch(args []string) error {
 
 	// Update Caddy configuration if available
 	if c.caddyMgr != nil {
-		fmt.Println("✓ Updating Caddy configuration...")
+		c.logger.Info("✓ Updating Caddy configuration...")
 		if err := c.generateCaddyConfig(); err != nil {
-			fmt.Printf("Warning: failed to generate Caddy config: %v\n", err)
+			c.logger.Error("Warning: failed to generate Caddy config: %v", err)
 		} else {
 			if err := c.caddyMgr.ReloadCaddy(); err != nil {
-				fmt.Printf("Warning: failed to reload Caddy: %v\n", err)
+				c.logger.Error("Warning: failed to reload Caddy: %v", err)
 			} else {
-				fmt.Println("✓ Caddy configuration updated")
+				c.logger.Info("✓ Caddy configuration updated")
 			}
 		}
 	} else {
-		fmt.Println("✓ Load balancer configuration updated (Caddy not configured)")
+		c.logger.Info("✓ Load balancer configuration updated (Caddy not configured)")
 	}
 
 	// Optionally stop old container if configured
 	if appConfig.Deployment.AutoRollback {
-		fmt.Printf("✓ Stopping old %s container...\n", oldColor)
+		c.logger.Info("✓ Stopping old %s container...", oldColor)
 		err = dockerManager.StopContainer(ctx, appName, oldColor, 30*time.Second)
 		if err != nil {
-			fmt.Printf("Warning: failed to stop old container: %v\n", err)
+			c.logger.Error("Warning: failed to stop old container: %v", err)
 		} else {
 			err = dockerManager.RemoveContainer(ctx, appName, oldColor, false)
 			if err != nil {
-				fmt.Printf("Warning: failed to remove old container: %v\n", err)
+				c.logger.Error("Warning: failed to remove old container: %v", err)
 			}
 		}
 	}
 
-	fmt.Printf("✓ Traffic switched to %s deployment\n", color)
+	c.logger.Info("✓ Traffic switched to %s deployment", color)
 	return nil
 }
 
@@ -373,18 +373,18 @@ func (c *CLI) handleLogs(args []string) error {
 		}
 	}
 
-	fmt.Printf("Logs for %s", appName)
 	if follow {
-		fmt.Print(" (following)")
+		c.logger.Info("Logs for %s (following):", appName)
+	} else {
+		c.logger.Info("Logs for %s:", appName)
 	}
-	fmt.Println(":")
 
-	fmt.Println("2024-01-15 14:30:25 [INFO] Application started")
-	fmt.Println("2024-01-15 14:30:26 [INFO] Listening on port 8080")
-	fmt.Println("2024-01-15 14:30:27 [INFO] Health check endpoint ready")
+	c.logger.Info("2024-01-15 14:30:25 [INFO] Application started")
+	c.logger.Info("2024-01-15 14:30:26 [INFO] Listening on port 8080")
+	c.logger.Info("2024-01-15 14:30:27 [INFO] Health check endpoint ready")
 
 	if follow {
-		fmt.Println("^C to stop following logs")
+		c.logger.Info("^C to stop following logs")
 	}
 
 	return nil
@@ -401,12 +401,12 @@ func (c *CLI) handleConfig(args []string) error {
 	}
 
 	if appName != "" {
-		fmt.Printf("Reloading configuration for %s...\n", appName)
+		c.logger.Info("Reloading configuration for %s...", appName)
 	} else {
-		fmt.Println("Reloading configuration for all applications...")
+		c.logger.Info("Reloading configuration for all applications...")
 	}
 
-	fmt.Println("✓ Configuration reloaded successfully")
+	c.logger.Info("✓ Configuration reloaded successfully")
 
 	return nil
 }
@@ -423,11 +423,11 @@ func (c *CLI) handleVersion(args []string) error {
 	}
 
 	if showFull {
-		fmt.Printf("dockswap version %s\n", Version)
-		fmt.Printf("commit: %s\n", commit)
-		fmt.Printf("built: %s\n", date)
+		c.logger.Info("dockswap version %s", Version)
+		c.logger.Info("commit: %s", commit)
+		c.logger.Info("built: %s", date)
 	} else {
-		fmt.Println(Version)
+		c.logger.Info("%s", Version)
 	}
 
 	return nil
@@ -458,27 +458,27 @@ func (c *CLI) handleCaddyStatus(args []string) error {
 		return fmt.Errorf("caddy manager not initialized - no app configs loaded")
 	}
 
-	fmt.Println("Caddy Status:")
+	c.logger.Info("Caddy Status:")
 
 	// Check if template exists (always show this)
 	if c.caddyMgr.HasTemplate() {
-		fmt.Printf("  Template: %s\n", "✅ Found")
+		c.logger.Info("  Template: %s", "✅ Found")
 	} else {
-		fmt.Printf("  Template: %s\n", "❌ Missing")
-		fmt.Println("  Run 'dockswap caddy config create' to create default template")
+		c.logger.Info("  Template: %s", "❌ Missing")
+		c.logger.Info("  Run 'dockswap caddy config create' to create default template")
 	}
 
 	// Check if Caddy is running
 	err := c.caddyMgr.ValidateCaddyRunning()
 	if err != nil {
-		fmt.Printf("  Status: %s\n", "❌ Not running")
-		fmt.Printf("  Error: %v\n", err)
-		fmt.Println("  To start Caddy, run: caddy run --config /path/to/caddy.json")
+		c.logger.Info("  Status: %s", "❌ Not running")
+		c.logger.Error("  Error: %v", err)
+		c.logger.Info("  To start Caddy, run: caddy run --config /path/to/caddy.json")
 		return nil
 	}
 
-	fmt.Printf("  Status: %s\n", "✅ Running")
-	fmt.Printf("  Admin URL: %s\n", c.caddyMgr.AdminURL)
+	c.logger.Info("  Status: %s", "✅ Running")
+	c.logger.Info("  Admin URL: %s", c.caddyMgr.AdminURL)
 
 	return nil
 }
@@ -488,7 +488,7 @@ func (c *CLI) handleCaddyReload(args []string) error {
 		return fmt.Errorf("caddy manager not initialized - no app configs loaded")
 	}
 
-	fmt.Println("Reloading Caddy configuration...")
+	c.logger.Info("Reloading Caddy configuration...")
 
 	// Check if Caddy is running
 	if err := c.caddyMgr.ValidateCaddyRunning(); err != nil {
@@ -505,7 +505,7 @@ func (c *CLI) handleCaddyReload(args []string) error {
 		return fmt.Errorf("failed to reload caddy: %w", err)
 	}
 
-	fmt.Println("✅ Caddy configuration reloaded successfully")
+	c.logger.Info("✅ Caddy configuration reloaded successfully")
 	return nil
 }
 
@@ -532,13 +532,13 @@ func (c *CLI) handleCaddyConfigCreate(args []string) error {
 		return fmt.Errorf("caddy manager not initialized - no app configs loaded")
 	}
 
-	fmt.Println("Creating default Caddy template...")
+	c.logger.Info("Creating default Caddy template...")
 
 	if err := c.caddyMgr.CreateDefaultTemplate(); err != nil {
 		return fmt.Errorf("failed to create default template: %w", err)
 	}
 
-	fmt.Printf("✅ Default template created at: %s\n", c.caddyMgr.GetTemplatePath())
+	c.logger.Info("✅ Default template created at: %s", c.caddyMgr.GetTemplatePath())
 	return nil
 }
 
@@ -547,15 +547,15 @@ func (c *CLI) handleCaddyConfigShow(args []string) error {
 		return fmt.Errorf("caddy manager not initialized - no app configs loaded")
 	}
 
-	fmt.Printf("Caddy Configuration:\n")
-	fmt.Printf("  Config Path: %s\n", c.caddyMgr.GetConfigPath())
-	fmt.Printf("  Template Path: %s\n", c.caddyMgr.GetTemplatePath())
-	fmt.Printf("  Admin URL: %s\n", c.caddyMgr.AdminURL)
+	c.logger.Info("Caddy Configuration:")
+	c.logger.Info("  Config Path: %s", c.caddyMgr.GetConfigPath())
+	c.logger.Info("  Template Path: %s", c.caddyMgr.GetTemplatePath())
+	c.logger.Info("  Admin URL: %s", c.caddyMgr.AdminURL)
 
 	if c.caddyMgr.HasTemplate() {
-		fmt.Printf("  Template: ✅ Found\n")
+		c.logger.Info("  Template: ✅ Found")
 	} else {
-		fmt.Printf("  Template: ❌ Missing\n")
+		c.logger.Info("  Template: ❌ Missing")
 	}
 
 	return nil
@@ -631,17 +631,17 @@ func (c *CLI) handleDbgCmd(args []string) error {
 	}
 
 	// Display output
-	fmt.Printf("Debug Command for app: %s\n\n", appName)
+	c.logger.Info("Debug Command for app: %s\n", appName)
 
-	fmt.Printf("Container (%s):\n", color)
-	fmt.Printf("  Container ID: %s\n", containerInfo.ID[:12])
-	fmt.Printf("  Image: %s\n", containerInfo.Image)
-	fmt.Printf("  Status: %s\n", containerInfo.Status)
-	fmt.Printf("  Health: %s\n", containerInfo.Health)
-	fmt.Printf("  Created: %s\n", containerInfo.Created.Format("2006-01-02 15:04:05"))
+	c.logger.Info("Container (%s):", color)
+	c.logger.Info("  Container ID: %s", containerInfo.ID[:12])
+	c.logger.Info("  Image: %s", containerInfo.Image)
+	c.logger.Info("  Status: %s", containerInfo.Status)
+	c.logger.Info("  Health: %s", containerInfo.Health)
+	c.logger.Info("  Created: %s", containerInfo.Created.Format("2006-01-02 15:04:05"))
 
-	fmt.Printf("\nEquivalent Docker Command:\n")
-	fmt.Println(dockerCommand)
+	c.logger.Info("\nEquivalent Docker Command:")
+	c.logger.Info("%s", dockerCommand)
 
 	return nil
 }
