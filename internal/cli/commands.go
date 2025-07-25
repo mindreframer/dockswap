@@ -412,8 +412,24 @@ func (c *CLI) handleConfig(args []string) error {
 }
 
 func (c *CLI) handleVersion(args []string) error {
-	fmt.Printf("dockswap version %s\n", Version)
-	fmt.Println("Built with Go")
+	showFull := false
+
+	// Check for --full or --detailed flag
+	for _, arg := range args {
+		if arg == "--full" || arg == "--detailed" {
+			showFull = true
+			break
+		}
+	}
+
+	if showFull {
+		fmt.Printf("dockswap version %s\n", Version)
+		fmt.Printf("commit: %s\n", commit)
+		fmt.Printf("built: %s\n", date)
+	} else {
+		fmt.Println(Version)
+	}
+
 	return nil
 }
 

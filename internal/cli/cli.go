@@ -9,7 +9,11 @@ import (
 	"strings"
 )
 
-const Version = "0.1.0"
+var (
+	Version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
 
 type GlobalFlags struct {
 	Config   string

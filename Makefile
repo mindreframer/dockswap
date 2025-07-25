@@ -7,12 +7,12 @@ GO_FILES=$(shell find . -name "*.go" -type f -not -path "./vendor/*")
 TEST_PACKAGES=$(shell go list ./... | grep -v /vendor/)
 
 # Build information
-VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+VERSION?=$(shell cat VERSION 2>/dev/null || echo "dev")
 BUILD_TIME=$(shell date -u '+%Y-%m-%d_%H:%M:%S')
 COMMIT=$(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
 # Go build flags
-LDFLAGS=-ldflags "-X main.Version=$(VERSION) -X main.BuildTime=$(BUILD_TIME) -X main.Commit=$(COMMIT)"
+LDFLAGS=-ldflags "-X dockswap/internal/cli.Version=$(VERSION) -X dockswap/internal/cli.commit=$(COMMIT) -X dockswap/internal/cli.date=$(BUILD_TIME)"
 
 .PHONY: help build clean install test test-verbose test-coverage fmt vet lint deps mod-tidy run dev all
 
