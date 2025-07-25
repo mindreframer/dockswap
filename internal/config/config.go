@@ -21,14 +21,14 @@ type AppConfig struct {
 
 type Docker struct {
 	RestartPolicy        string                       `yaml:"restart_policy"`
-	PullPolicy          string                       `yaml:"pull_policy"`
-	MemoryLimit         string                       `yaml:"memory_limit"`
-	CPULimit            string                       `yaml:"cpu_limit"`
-	Environment         map[string]string            `yaml:"environment"`
+	PullPolicy           string                       `yaml:"pull_policy"`
+	MemoryLimit          string                       `yaml:"memory_limit"`
+	CPULimit             string                       `yaml:"cpu_limit"`
+	Environment          map[string]string            `yaml:"environment"`
 	EnvironmentOverrides map[string]map[string]string `yaml:"environment_overrides"`
-	Volumes             []string                     `yaml:"volumes"`
-	ExposePort          int                          `yaml:"expose_port"`
-	Network             string                       `yaml:"network"`
+	Volumes              []string                     `yaml:"volumes"`
+	ExposePort           int                          `yaml:"expose_port"`
+	Network              string                       `yaml:"network"`
 }
 
 type Ports struct {
@@ -106,19 +106,19 @@ func LoadAllConfigs(configDir string) (map[string]*AppConfig, error) {
 // GetEnvironmentForColor merges base environment with color-specific overrides
 func (d *Docker) GetEnvironmentForColor(color string) map[string]string {
 	result := make(map[string]string)
-	
+
 	// Copy base environment
 	for k, v := range d.Environment {
 		result[k] = v
 	}
-	
+
 	// Apply color-specific overrides
 	if colorOverrides, exists := d.EnvironmentOverrides[color]; exists {
 		for k, v := range colorOverrides {
 			result[k] = v
 		}
 	}
-	
+
 	return result
 }
 

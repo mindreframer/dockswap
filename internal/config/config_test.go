@@ -224,8 +224,8 @@ func TestGetEnvironmentForColor(t *testing.T) {
 			color: "blue",
 			expected: map[string]string{
 				"DATABASE_URL": "postgres://localhost/test",
-				"LOG_LEVEL":    "debug", // overridden
-				"PORT":         "8081",  // overridden
+				"LOG_LEVEL":    "debug",      // overridden
+				"PORT":         "8081",       // overridden
 				"NEW_VAR":      "blue_value", // added
 			},
 		},
@@ -262,11 +262,11 @@ func TestGetEnvironmentForColor(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := docker.GetEnvironmentForColor(tt.color)
-			
+
 			if len(result) != len(tt.expected) {
 				t.Errorf("GetEnvironmentForColor() returned %d variables, expected %d", len(result), len(tt.expected))
 			}
-			
+
 			for key, expectedValue := range tt.expected {
 				if actualValue, exists := result[key]; !exists {
 					t.Errorf("GetEnvironmentForColor() missing key %s", key)
@@ -503,10 +503,10 @@ proxy:
 	// Test blue environment
 	blueEnv := config.Docker.GetEnvironmentForColor("blue")
 	expectedBlueEnv := map[string]string{
-		"DATABASE_URL":   "postgres://localhost/test",
-		"LOG_LEVEL":      "debug", // overridden
-		"PORT":           "8081",  // overridden
-		"BLUE_SPECIFIC":  "blue_value", // added
+		"DATABASE_URL":  "postgres://localhost/test",
+		"LOG_LEVEL":     "debug",      // overridden
+		"PORT":          "8081",       // overridden
+		"BLUE_SPECIFIC": "blue_value", // added
 	}
 
 	for key, expected := range expectedBlueEnv {
@@ -518,10 +518,10 @@ proxy:
 	// Test green environment
 	greenEnv := config.Docker.GetEnvironmentForColor("green")
 	expectedGreenEnv := map[string]string{
-		"DATABASE_URL":    "postgres://localhost/test",
-		"LOG_LEVEL":       "info", // not overridden
-		"PORT":            "8082", // overridden
-		"GREEN_SPECIFIC":  "green_value", // added
+		"DATABASE_URL":   "postgres://localhost/test",
+		"LOG_LEVEL":      "info",        // not overridden
+		"PORT":           "8082",        // overridden
+		"GREEN_SPECIFIC": "green_value", // added
 	}
 
 	for key, expected := range expectedGreenEnv {
