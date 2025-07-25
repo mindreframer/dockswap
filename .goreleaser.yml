@@ -1,0 +1,47 @@
+version: 2
+project_name: dockswap
+
+before:
+  hooks:
+    - go mod tidy
+
+release:
+  github:
+    owner: "mindreframer"
+    name: "dockswap"
+
+builds:
+  - id: dockswap
+    main: ./main.go
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
+    env:
+      - CGO_ENABLED=0
+    binary: dockswap
+    
+archives:
+  - id: default
+    ids:
+      - dockswap
+    formats: ['tar.gz']
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - Readme.md
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:' 

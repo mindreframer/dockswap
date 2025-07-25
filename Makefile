@@ -134,3 +134,15 @@ watch:
 	else \
 		echo "entr not found. Install with: brew install entr (macOS) or apt-get install entr (Ubuntu)"; \
 	fi
+
+.PHONY: goreleaser-snapshot
+goreleaser-snapshot: ## Build snapshot release with goreleaser
+	@which goreleaser > /dev/null || (echo "goreleaser not installed. Install with: go install github.com/goreleaser/goreleaser@latest" && exit 1)
+	goreleaser release --snapshot --clean
+
+.PHONY: goreleaser-release
+goreleaser-release: ## Create release with goreleaser (requires git tag)
+	@which goreleaser > /dev/null || (echo "goreleaser not installed. Install with: go install github.com/goreleaser/goreleaser@latest" && exit 1)
+	@echo "Creating release for version: $(VERSION)"
+	@echo "Make sure you have created a git tag first: git tag v$(VERSION)"
+	goreleaser release --clean
